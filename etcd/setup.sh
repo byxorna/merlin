@@ -7,5 +7,6 @@ CONTAINER_PORT=4001
 echo "Starting up etcd container on $PUBLIC_IP:$PUBLIC_PORT -> $CONTAINER_NAME:$CONTAINER_PORT"
 boot2docker ssh docker run -p $PUBLIC_PORT:$CONTAINER_PORT -p 7001:7001 coreos/etcd -addr $PUBLIC_IP:$PUBLIC_PORT -name=$CONTAINER_NAME
 
-echo "etcd terminated"
+boot2docker ssh docker ps
+echo -e "\netcd terminated"
 
