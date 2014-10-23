@@ -1,0 +1,17 @@
+{
+  "name": "merlin-example-client",
+  "version": "0.1.0",
+  "description": "Node webapp that demos autoreloading configs from confd and merlin",
+  "main": "index.js",
+  "scripts": {
+    "start":"node ./index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Gabe Conradi <gummybearx@gmail.com>",
+  "license": "Apache 2.0",
+  "dependencies": {
+    "express": "3.x",
+    "jade": "0.x",
+    "js-yaml":"3.2.x"
+  }
+}
