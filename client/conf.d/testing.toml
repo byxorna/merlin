@@ -1,0 +1,10 @@
+[template]
+prefix = "/merlin/testing"
+src = "testing.conf.tmpl"
+dest = "/tmp/testing.conf"
+keys = [
+  "/key1",
+  "/backends"
+]
+check_cmd = "echo 'checking config {{.src}}'"
+reload_cmd = "echo 'reload config {{.src}}' && cat {{.src}}"
