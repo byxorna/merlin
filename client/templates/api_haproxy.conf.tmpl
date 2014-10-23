@@ -1,0 +1,39 @@
+global
+        maxconn             10240
+        log-send-hostname
+defaults
+        stats       enable
+        stats       hide-version
+        stats       auth admin:admin
+        stats       uri /admin?status
+        stats       refresh 2s
+        mode        http
+        clitimeout  30m
+        srvtimeout  30m
+        contimeout  4s
+        option      httpclose
+        option      forceclose
+        option      forwardfor except 127.0.0.1
+        option      httplog
+        option      dontlognull
+        option      log-separate-errors
+        retries     2
+
+backend merlinbackend
+        balance roundrobin
+        errorfile   503 /etc/errorfiles/migration_api.json
+{{range gets "/backends/*"}}{{$backend := json .Value}}
+        server {{.Key}} {{$backend.ip}}:{{$backend.port}} weight 1 maxconn 60 check inter 2s{{end}}
+
+frontend mainfrontend
+        bind *:80
+        maxconn             81920
+
+        log 127.0.0.1   local0
+        log 127.0.0.1   local1 notice
+
+        capture request header User-Agent len 64
+        capture request header X-Forwarded-For len 31
+
+        default_backend merlinbackend
+
