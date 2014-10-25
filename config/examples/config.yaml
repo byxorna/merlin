@@ -1,0 +1,12 @@
+---
+testing:
+  watch: /merlin/testing
+  templates:
+    "config/examples/templates/testing.conf.erb": testing.conf
+  destination: /tmp/testing/
+  static:
+    - config/examples/static/test.txt
+  debounce: 10 seconds
+  check_command: echo "Checking %s"
+  reload_command: echo "reloading %s"
+

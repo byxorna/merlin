@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+
+$:.unshift File.join File.dirname(__FILE__), *%w[.. lib]
+require 'merlin'
+require 'etcd'
+require 'optparse'
+require 'yaml'
+
+@options = {}
+@defaults = {
+  :mode => :watch,
+  :config => '/etc/merlin/default.yaml',
+  :debug => false,
+  :daemonize => false,
+  :etcd_server => 'localhost',
+  :etcd_port => 4001
+}
+
+OptionParser.new do |opts|
+  opts.on('-h','--help','Show help') { puts opts ; exit 0 }
+  opts.on('-o','--oneshot','Run a single generation; dont watch for changes') {@options[:mode] = :oneshot}
+  opts.on('-c','--config CONFIG',String,"Use config (Default: #{@defaults[:config]})"){|v| @options[:config] = v}
+  opts.on('-d','--debug','Enable debugging'){ @options[:debug] = true}
+  opts.on('-D','--daemonize','Daemonize process'){ @options[:daemonize] = true}
+  opts.on('-e','--etcd SERVER[:PORT]',String,"Etcd server and optional port (Default #{@defaults[:etcd_server]}:#{@defaults[:etcd_port]})") do |v|
+    host,port = v.split ':'
+    @options[:etcd_server] = host
+    @options[:etcd_port] = port unless port.nil?
+  end
+end.parse!
+
+@options = @defaults.merge @options
+puts @options.inspect
+
+begin
+  @config = YAML.load_file @options[:config]
+rescue => e
+  abort "Unable to parse config #{@options[:config]}! #{e.message}"
+end
+
+#TODO vet config is all present
+
+if @options[:mode] == :watch
+  raise "IMPLEMENT watch mode"
+else
+  @config.each do |name, config|
+    emitter = Merlin::Emitter.new(name, config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'])
+    begin
+      client = Etcd::Client.new(:uris => ["http://#{@options[:etcd_server]}:#{@options[:etcd_port]}"])
+      client.connect
+    rescue => e
+      abort "Unable to configure etcd client: #{e.message}"
+    end
+    watcher = Merlin::EtcdWatcher.new(name, client)
+    watcher.get(config['watch']) do |data|
+      puts "I got #{data.inspect}"
+      emitter.changed data
+    end
+  end
+end
