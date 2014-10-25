@@ -15,7 +15,7 @@ Gem::Specification.new do |s|
   s.require_paths = %w(lib)
   s.bindir        = 'bin'
 
-  s.add_dependency "etcd-rb"
+  s.add_dependency "etcd"
   s.add_dependency "erubis", "~> 2.7.0"
   s.add_dependency "listen", "~> 2.0"
 
