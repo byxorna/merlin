@@ -22,6 +22,15 @@ A sample config looks like this:
       check_cmd: haproxy -f /etc/haproxy/haproxy.cfg -c
       commit_cmd: service haproxy reload
 
+## Templates
+
+A sample template using embedded Ruby. The data that you are watching for at "watch" will be available in ```data```.
+
+    # this is a template
+    <% data.children.each do |el| %>
+      <%= el.key %>: <%= el.value %>
+    <% end %>
+
 
 ## Usage
 
