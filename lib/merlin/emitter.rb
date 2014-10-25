@@ -10,7 +10,7 @@ require 'open3'
 
 module Merlin
   class Emitter
-    attr_accessor :templates, :destination, :logger, :check_cmd, :commit_callback
+    attr_accessor :templates, :destination, :logger, :check_cmd, :commit_cmd
     def initialize(name,templates,destination,check_cmd = nil, commit_cmd = nil)
       @name, @check_cmd, @commit_cmd = name, check_cmd, commit_cmd
       # ensure directory is a thing
@@ -25,34 +25,43 @@ module Merlin
       @logger = Logger.new STDOUT, "emitter::#{@name}"
     end
 
-    def changed data
+    def emit data
       # inflate the templates
-      logger.info "Templating #{templates.keys.length} templates"
-      logger.debug "data: #{data.inspect}"
       files = templates.map do |template,target|
-        logger.debug "Templating #{template}"
-        input = File.read(template)
-        erb = Erubis::Eruby.new(input)
-        #TODO can we create a custom binding that only has variables we want to be scoped in it?
-        output = erb.result(binding)
-        logger.debug "Turned #{template} into #{output}"
+        begin
+          logger.info "Templating #{template}"
+          input = File.read(template)
+          erb = Erubis::Eruby.new(input)
+          #TODO can we create a custom binding that only has variables we want to be scoped in it?
+          output = erb.result(binding)
+        rescue => e
+          logger.error "Error templating #{template}: #{e.message}"
+          raise e
+        end
         [target,output]
       end
       # map template name to new output
       target_output = Hash[files]
       # write files out targets if they have changed
       updated_targets = target_output.map do |target,output|
-        og_hash = Digest::SHA256.hexdigest File.read target
-        new_hash = Digest::SHA256.hexdigest output
-        logger.debug "Computed SHA256 of #{target} as #{og_hash} and new output as #{new_hash}"
+        target = File.join(destination,target)
+        og_hash = if File.readable? target
+            Digest::SHA256.file(target).hexdigest
+          else
+            "none"
+          end
+        new_hash = Digest::SHA256.hexdigest(output)
+        logger.debug "#{target} SHA256: #{og_hash}, new contents: #{new_hash}"
         if og_hash == new_hash
-          logger.debug "No change to #{target}"
+          logger.info "No change to #{target}"
           nil
         else
-          logger.debug "Moving #{target} to #{target}.bak"
-          FileUtils.mv target, "#{target}.bak"
+          if og_hash != "none"
+            logger.debug "Moving #{target} to #{target}.bak"
+            FileUtils.mv target, "#{target}.bak"
+          end
           logger.info "Writing #{target}"
-          File.new(target,'w') { |f| f.write(output) }
+          File.open(target,'w') { |f| f.write(output) }
           target
         end
       end.compact
@@ -87,7 +96,7 @@ module Merlin
             logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
             if type == :check
               logger.warn "Rolling back modified files: #{updated_targets.join " "}"
-              updated_targets.each do |t|
+              updated_targets.each do |target|
                 FileUtils.mv "#{target}.bak", target
               end
             end

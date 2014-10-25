@@ -1,5 +1,5 @@
 This is a template
-<% data.each do |el| %>
-  <%= el.inspect %>
+<% data.children.each do |el| %>
+  <%= el.key %>: <%= el.value %>
 <% end %>
 This is the end of the template

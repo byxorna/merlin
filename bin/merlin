@@ -38,23 +38,50 @@ rescue => e
   abort "Unable to parse config #{@options[:config]}! #{e.message}"
 end
 
-#TODO vet config is all present
+# vet config is all present
+default_config = {
+  'static' => []
+}
+# TODO add more logic about ensuring config is well formed
+targets = @config.inject({}) do |memo,(k,v)|
+  memo[k.to_sym] = default_config.merge v
+  ['watch','templates','destination'].each do |config_setting|
+    abort "Template #{k} is missing #{config_setting}!" if memo[k.to_sym][config_setting].nil?
+  end
+  memo
+end
 
 if @options[:mode] == :watch
-  raise "IMPLEMENT watch mode"
-else
-  @config.each do |name, config|
+  #TODO this should spawn a bunch of threads to watch?
+  watchers = targets.map do |name, config|
     emitter = Merlin::Emitter.new(name, config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'])
     begin
-      client = Etcd::Client.new(:uris => ["http://#{@options[:etcd_server]}:#{@options[:etcd_port]}"])
-      client.connect
+      client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
     rescue => e
       abort "Unable to configure etcd client: #{e.message}"
     end
-    watcher = Merlin::EtcdWatcher.new(name, client)
-    watcher.get(config['watch']) do |data|
-      puts "I got #{data.inspect}"
-      emitter.changed data
+    watcher = Merlin::EtcdWatcher.new(name, client, config['watch'])
+    watcher.observe do |val|
+      #TODO need better error handling around observer
+      watcher.get do |data|
+        emitter.emit data
+      end
     end
+  end
+  Kernel.at_exit do
+    puts "terminating watchers"
+    watchers.each(&:terminate)
+  end
+  sleep
+else
+  targets.each do |name, config|
+    emitter = Merlin::Emitter.new(name, config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'])
+    begin
+      client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
+    rescue => e
+      abort "Unable to configure etcd client: #{e.message}"
+    end
+    watcher = Merlin::EtcdWatcher.new(name, client, config['watch'])
+    emitter.emit watcher.get
   end
 end
