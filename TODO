@@ -1,3 +1,0 @@
-* change watching to generate a config if index=nil
-* support static file changes triggering a regen 
-

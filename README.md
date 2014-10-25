@@ -80,3 +80,12 @@ Watch and react to changes in etcd and emit new configs:
       /merlin/testing/newkey: 3
       /merlin/testing/whooo: 123
     This is the end of the template
+
+## TODO
+
+* Support for watching static files with the watch/file class. Needs to be fleshed out in emitter
+* Thread watching multiple template groups (needs to support logging to separate files?)
+* Config validation
+* Support coalescing watches within an interval, so we dont fire a regeneration every change
+
+
