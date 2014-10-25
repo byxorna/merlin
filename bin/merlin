@@ -61,7 +61,10 @@ if @options[:mode] == :watch
       abort "Unable to configure etcd client: #{e.message}"
     end
     watcher = Merlin::EtcdWatcher.new(name, client, config['watch'])
-    watcher.observe do |val|
+    # lets get the current state first, and begin observing from that modified_index
+    d = watcher.get
+    # this way we will trigger a watch immediately on startup
+    watcher.observe d.etcd_index do |val|
       #TODO need better error handling around observer
       watcher.get do |data|
         emitter.emit data

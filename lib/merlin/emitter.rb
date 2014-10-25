@@ -75,32 +75,34 @@ module Merlin
     private
     def _check_and_commit updated_targets
       success = true
-      {:check => check_cmd, :commit => commit_cmd}.each do |type,cmd|
-        if cmd.nil?
-          logger.info "No #{type} command specified, skipping check"
-        else
-          logger.info "Running #{type} command: #{cmd}"
-          res = Open3.popen2e(cmd) do |stdin, output, th|
-            stdin.close
-            pid = th.pid
-            logger.debug "Started pid #{pid}"
-            output.each {|l| logger.debug l.strip }
-            status = th.value
-            logger.debug "Process exited: #{status.to_s}"
-            status
-          end
-          if res.success?
-            logger.info "#{type.capitalize} succeeded"
+      unless updated_targets.empty?
+        {:check => check_cmd, :commit => commit_cmd}.each do |type,cmd|
+          if cmd.nil?
+            logger.info "No #{type} command specified, skipping check"
           else
-            success = false
-            logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
-            if type == :check
-              logger.warn "Rolling back modified files: #{updated_targets.join " "}"
-              updated_targets.each do |target|
-                FileUtils.mv "#{target}.bak", target
-              end
+            logger.info "Running #{type} command: #{cmd}"
+            res = Open3.popen2e(cmd) do |stdin, output, th|
+              stdin.close
+              pid = th.pid
+              logger.debug "Started pid #{pid}"
+              output.each {|l| logger.debug l.strip }
+              status = th.value
+              logger.debug "Process exited: #{status.to_s}"
+              status
             end
-            break
+            if res.success?
+              logger.info "#{type.capitalize} succeeded"
+            else
+              success = false
+              logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
+              if type == :check
+                logger.warn "Rolling back modified files: #{updated_targets.join " "}"
+                updated_targets.each do |target|
+                  FileUtils.mv "#{target}.bak", target
+                end
+              end
+              break
+            end
           end
         end
       end

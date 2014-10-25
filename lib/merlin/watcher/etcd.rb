@@ -12,18 +12,6 @@ module Merlin
       @logger = Logger.new STDOUT
     end
 
-    # run a block ever time we observe a change at path
-    # and parameterize it with the full contents of what is available at that path
-    #def observe &block
-    #  raise "You should give me a block" unless block_given?
-    #  logger.info "Watching #{path} for changes"
-    #  etcd.observe(path) do |k,v,info|
-    #    logger.debug "Saw an update at #{k}: #{v} #{info.inspect}"
-    #    # TODO should we be querying for the waitIndex instead of latest??
-    #    get path, &block
-    #  end
-    #end
-
     def get &block
       logger.debug "Getting #{path}"
       begin
@@ -39,18 +27,24 @@ module Merlin
       end
     end
 
-    def observe &block
+    # this will persistently observe the path from wait_index and run block
+    # for each change detected. The quirk is that we will rewatch for the 
+    # etcd_index+1 index, so if multiple changes happen between watches, we
+    # fire for each one. TODO we should add debouncing so we can defer updates
+    # within a window
+    def observe wait_index = nil, &block
       raise "You should give me a block" unless block_given?
       running = true
-      index = nil
+      index = wait_index
       @thread = Thread.start do
         logger.debug "Watching #{path} with index #{index.inspect}"
         while running
           val = client.watch(path, recursive: true, index: index)
           if running
-            logger.info "Watch fired for #{path}: #{val.action} #{val.node.key} with modified index #{val.node.modified_index}"
-            index = val.node.modified_index + 1
-            block.call(val.node)
+            logger.info "Watch fired for #{path}: #{val.action} #{val.node.key} with etcd index #{val.etcd_index}"
+            # lets watch for the next event
+            index = val.etcd_index + 1
+            block.call(val)
           end
         end
       end
@@ -63,11 +57,11 @@ module Merlin
       self
     end
 
-    def rerun &block
+    def rerun wait_index = nil, &block
       logger.debug "rerun for #{path}"
       @thread.terminate if @thread.alive?
       logger.debug "after termination for #{path}"
-      observe block
+      observe wait_index, block
     end
 
     def join
