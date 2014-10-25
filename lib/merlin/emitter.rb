@@ -80,12 +80,12 @@ module Merlin
           logger.info "No #{type} command specified, skipping check"
         else
           logger.info "Running #{type} command: #{cmd}"
-          res = Open3.popen2e(cmd) do |stdin, output, wait_th|
+          res = Open3.popen2e(cmd) do |stdin, output, th|
             stdin.close
-            pid = wait_thr.pid
+            pid = th.pid
             logger.debug "Started pid #{pid}"
-            output.each {|l| logger.debug l }
-            status = wait_thr.value
+            output.each {|l| logger.debug l.strip }
+            status = th.value
             logger.debug "Process exited: #{status.to_s}"
             status
           end
