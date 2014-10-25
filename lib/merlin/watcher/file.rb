@@ -1,23 +1,29 @@
 require 'merlin'
-require 'digest'
 require 'listen'
+require 'logger'
 
-#https://github.com/guard/listen
 module Merlin
   class FileWatcher
-    attr_accessor :filename
-    def initialize name, filename
-      @name, @filename = name, filename
+    attr_accessor :filename, :logger
+    def initialize filename
+      @filename = filename
+      @logger = Logger.new STDOUT
     end
 
     def observe &block
       #TODO listen to a directory, yield block whenever there is a change
-      @listener = Listen.to(File.dirname(filename), :only => %r|#{filename}$|) do |mod,add,del|
-        # run the block if the file was modified
-        yield block, mod unless mod.nil?
+      logger.debug "Watching for changes to #{filename}"
+      @listener = Listen.to(File.dirname(filename), :only => %r|#{File.basename filename}|) do |mod,add,del|
+      #@listener = Listen.to(File.dirname(filename)) do |mod,add,del|
+        unless mod.empty?
+          logger.debug "Static files changed: #{mod.inspect}"
+          # run the block if the file was modified
+          block.call(mod) unless mod.empty?
+        end
       end
+      logger.debug "Starting listener"
       @listener.start
-#Digest::SHA256.hexdigest File.read "data.dat"
+      self
     end
 
     # pass all unknown methods through to the listener

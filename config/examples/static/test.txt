@@ -1,1 +1,1 @@
-static file
+this is a sample static file

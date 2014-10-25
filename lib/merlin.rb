@@ -3,5 +3,6 @@ require 'etcd'
 require 'logger'
 require 'merlin/emitter'
 require 'merlin/watcher/etcd'
+require 'merlin/watcher/file'
 
 module Merlin ; end

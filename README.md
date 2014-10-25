@@ -12,6 +12,8 @@ A sample config looks like this:
       templates:
         "config/examples/templates/testing.conf.erb": testing.conf
       destination: /tmp/testing/
+      static_files:
+        - config/examples/static/test.txt
       check_cmd: echo "Check command"
       commit_cmd: echo "Commit command"
     haproxy:
@@ -81,11 +83,14 @@ Watch and react to changes in etcd and emit new configs:
       /merlin/testing/whooo: 123
     This is the end of the template
 
+## Static files
+
+You can observe static files that change on the filesystem, as well as changes to etcd. This enables static files that are managed by another system (i.e. human configs from a config management system) to trigger merlin to generate configs and take action. It uses https://github.com/guard/listen under the hood, so if your filesystem doesnt suck, it will use something like inotify instead of polling.
+
 ## TODO
 
-* Support for watching static files with the watch/file class. Needs to be fleshed out in emitter
-* Thread watching multiple template groups (needs to support logging to separate files?)
-* Config validation
-* Support coalescing watches within an interval, so we dont fire a regeneration every change
+* Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)
+* Config validation (bin/merlin)
+* Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)
 
 

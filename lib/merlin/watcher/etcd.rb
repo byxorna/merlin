@@ -29,7 +29,7 @@ module Merlin
 
     # this will persistently observe the path from wait_index and run block
     # for each change detected. The quirk is that we will rewatch for the 
-    # etcd_index+1 index, so if multiple changes happen between watches, we
+    # modified_index+1 index, so if multiple changes happen between watches, we
     # fire for each one. TODO we should add debouncing so we can defer updates
     # within a window
     def observe wait_index = nil, &block
@@ -37,13 +37,14 @@ module Merlin
       running = true
       index = wait_index
       @thread = Thread.start do
-        logger.debug "Watching #{path} with index #{index.inspect}"
+        logger.debug "Started etcd watch thread at #{path} with index #{index.inspect}"
         while running
+          logger.debug "Awaiting index #{index} at #{path}"
           val = client.watch(path, recursive: true, index: index)
           if running
-            logger.info "Watch fired for #{path}: #{val.action} #{val.node.key} with etcd index #{val.etcd_index}"
-            # lets watch for the next event
-            index = val.etcd_index + 1
+            logger.info "Watch fired for #{path}: #{val.action} #{val.node.key} with etcd index #{val.etcd_index} and modified index #{val.node.modified_index}"
+            # lets watch for the next event from modified index
+            index = val.node.modified_index + 1
             block.call(val)
           end
         end

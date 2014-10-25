@@ -66,9 +66,6 @@ module Merlin
         end
       end.compact
 
-      # see if anything has changed (both emitted and static files)
-      #TODO use watcher/file
-
       return _check_and_commit updated_targets
     end
 

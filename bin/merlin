@@ -30,7 +30,6 @@ OptionParser.new do |opts|
 end.parse!
 
 @options = @defaults.merge @options
-puts @options.inspect
 
 begin
   @config = YAML.load_file @options[:config]
@@ -40,7 +39,7 @@ end
 
 # vet config is all present
 default_config = {
-  'static' => []
+  'static_files' => []
 }
 # TODO add more logic about ensuring config is well formed
 targets = @config.inject({}) do |memo,(k,v)|
@@ -53,7 +52,7 @@ end
 
 if @options[:mode] == :watch
   #TODO this should spawn a bunch of threads to watch?
-  watchers = targets.map do |name, config|
+  watchers = targets.inject({:etcd => [], :files => []}) do |watchers, (name, config)|
     emitter = Merlin::Emitter.new(name, config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'])
     begin
       client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
@@ -64,16 +63,23 @@ if @options[:mode] == :watch
     # lets get the current state first, and begin observing from that modified_index
     d = watcher.get
     # this way we will trigger a watch immediately on startup
-    watcher.observe d.etcd_index do |val|
-      #TODO need better error handling around observer
+    emit_blk = proc do |arg|
       watcher.get do |data|
         emitter.emit data
       end
     end
+    watcher.observe d.etcd_index, &emit_blk
+    static_watchers = config['static_files'].map do |f|
+      Merlin::FileWatcher.new(f).observe(&emit_blk)
+    end
+    watchers[:etcd] << watcher
+    watchers[:files] = watchers[:files] + static_watchers
+    watchers
   end
   Kernel.at_exit do
     puts "terminating watchers"
-    watchers.each(&:terminate)
+    watchers[:etcd].each(&:terminate)
+    watchers[:files].each(&:stop)
   end
   sleep
 else

@@ -4,7 +4,7 @@ testing:
   templates:
     "config/examples/templates/testing.conf.erb": testing.conf
   destination: /tmp/testing/
-  static:
+  static_files:
     - config/examples/static/test.txt
   debounce: 10 seconds
   check_cmd: echo "Checking..."
