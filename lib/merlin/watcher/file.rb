@@ -1,13 +1,17 @@
 require 'merlin'
 require 'listen'
 require 'logger'
+require 'merlin/logstub'
 
 module Merlin
   class FileWatcher
-    attr_accessor :filename, :logger
-    def initialize filename
+    include Logstub # provide stubbed logger methods
+
+    attr_accessor :filename, :listener
+    def initialize filename, logger = nil
       @filename = filename
-      @logger = Logger.new STDOUT
+      @logger = logger
+      @listener = nil
     end
 
     def observe &block
@@ -29,7 +33,10 @@ module Merlin
     # pass all unknown methods through to the listener
     # so humans can call #start #stop #pause #unpause #processing? etc.
     def method_missing(meth, *args, &block)
-      @listener.send(meth, *args, &block)
+      if [:start, :stop, :pause, :unpause, :processing?].include? meth
+        return listener.send(meth, *args, &block) unless listener.nil?
+      end
+      super
     end
 
   end

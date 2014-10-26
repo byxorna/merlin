@@ -3,6 +3,7 @@ require 'logger'
 require 'erubis'
 require 'fileutils'
 require 'open3'
+require 'merlin/logstub'
 
 #TODO make template inflation and checking files for content changes multithreaded
 #TODO debounce events if configured, so we dont constantly emit configs
@@ -10,9 +11,11 @@ require 'open3'
 
 module Merlin
   class Emitter
-    attr_accessor :templates, :destination, :logger, :check_cmd, :commit_cmd
-    def initialize(name,templates,destination,check_cmd = nil, commit_cmd = nil)
-      @name, @check_cmd, @commit_cmd = name, check_cmd, commit_cmd
+    include Logstub
+    attr_accessor :templates, :destination, :check_cmd, :commit_cmd
+
+    def initialize(templates,destination,check_cmd = nil, commit_cmd = nil, logger = nil)
+      @check_cmd, @commit_cmd = check_cmd, commit_cmd
       # ensure directory is a thing
       dest = File.stat(destination)
       raise "#{destination} not a directory" unless dest.directory?
@@ -22,7 +25,7 @@ module Merlin
       unreadable = templates.keys.reject{|t| File.readable? t}
       raise "Unable to read templates: #{unreadable.inspect}" unless unreadable.empty?
       @templates = templates
-      @logger = Logger.new STDOUT, "emitter::#{@name}"
+      @logger = logger
     end
 
     def emit data
@@ -57,12 +60,13 @@ module Merlin
           nil
         else
           if og_hash != "none"
-            logger.debug "Moving #{target} to #{target}.bak"
-            FileUtils.mv target, "#{target}.bak"
+            backup = "#{target}.bak"
+            logger.debug "Copying #{target} to #{backup}"
+            FileUtils.cp target, backup
           end
           logger.info "Writing #{target}"
           File.open(target,'w') { |f| f.write(output) }
-          target
+          {:file => target, :backup => backup}
         end
       end.compact
 
@@ -93,9 +97,16 @@ module Merlin
               success = false
               logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
               if type == :check
-                logger.warn "Rolling back modified files: #{updated_targets.join " "}"
-                updated_targets.each do |target|
-                  FileUtils.mv "#{target}.bak", target
+                files_to_rollback = updated_targets.reject {|x| x[:backup].nil? }
+                files_to_remove = updated_targets.select{|x| x[:backup].nil? }.map{|x| x[:file]}
+                logger.warn "Performing rollback of modified files"
+                unless files_to_remove.empty?
+                  logger.debug "Removing #{files_to_remove.join " "}"
+                  File.unlink(*files_to_remove)
+                end
+                files_to_rollback.each do |target|
+                  logger.debug "Moving #{target[:backup]} to #{target[:file]}"
+                  FileUtils.mv target[:backup], target[:file]
                 end
               end
               break

@@ -2,6 +2,8 @@
 
 Inspired by https://github.com/kelseyhightower/confd, this tool allows you to generate configuration files from data in etcd.
 
+[![Build Status](https://travis-ci.org/byxorna/merlin.png?branch=master)](https://travis-ci.org/byxorna/merlin) 
+
 ## Configuration
 
 A sample config looks like this:
@@ -87,8 +89,18 @@ Watch and react to changes in etcd and emit new configs:
 
 You can observe static files that change on the filesystem, as well as changes to etcd. This enables static files that are managed by another system (i.e. human configs from a config management system) to trigger merlin to generate configs and take action. It uses https://github.com/guard/listen under the hood, so if your filesystem doesnt suck, it will use something like inotify instead of polling.
 
+## Hacking
+
+Use bundler to install the dependencies: ```bundle install```, then hack away and test with ```bundle exec bin/merlin```!
+
+## Testing
+
+```bundle exec rake rspec```
+
 ## TODO
 
+* Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
+* Finish test suite! Fix what may be broken in FileWatcher, and write tests for the CLI
 * Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)
 * Config validation (bin/merlin)
 * Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)

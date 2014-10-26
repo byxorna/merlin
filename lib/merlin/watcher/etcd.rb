@@ -1,15 +1,17 @@
 require 'merlin'
 require 'logger'
+require 'merlin/logstub'
 
 module Merlin
   class EtcdWatcher
-    attr_accessor :name, :client, :logger, :path, :index, :running
-    def initialize(name,client,path)
-      @name = "watcher::#{name}"
+    include Logstub
+    attr_reader :running, :index, :path, :client
+
+    def initialize(client,path,logger=nil)
       @path = path
       @client = client
       @running = false
-      @logger = Logger.new STDOUT
+      @logger = logger
     end
 
     def get &block
@@ -34,7 +36,7 @@ module Merlin
     # within a window
     def observe wait_index = nil, &block
       raise "You should give me a block" unless block_given?
-      running = true
+      @running = true
       index = wait_index
       @thread = Thread.start do
         logger.debug "Started etcd watch thread at #{path} with index #{index.inspect}"
@@ -53,8 +55,10 @@ module Merlin
     end
 
     def terminate
-      running = false
-      @thread.terminate if @thread.alive?
+      unless @thread.nil?
+        @running = false
+        @thread.terminate if @thread.alive?
+      end
       self
     end
 
