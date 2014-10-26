@@ -100,7 +100,7 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 ## TODO
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
-* Finish test suite! Fix what may be broken in FileWatcher, and write tests for the CLI
+* Finish test suite! Fix what may be broken in FileWatcher, and write tests for the CLI.
 * Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)
 * Config validation (bin/merlin)
 * Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)
