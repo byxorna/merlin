@@ -64,8 +64,11 @@ module Merlin
             logger.debug "Copying #{target} to #{backup}"
             FileUtils.cp target, backup
           end
-          logger.info "Writing #{target}"
-          File.open(target,'w') { |f| f.write(output) }
+          tmptarget = File.join(File.dirname(target),".#{File.basename(target)}-#{Time.now.to_i}")
+          logger.info "Writing #{tmptarget}"
+          File.open(tmptarget,'w') { |f| f.write(output) }
+          logger.debug "Moving #{tmptarget} to #{target}"
+          FileUtils.mv tmptarget, target
           {:file => target, :backup => backup}
         end
       end.compact
