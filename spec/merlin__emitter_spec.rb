@@ -26,7 +26,7 @@ describe Merlin::Emitter do
   let(:destination) { 'spec/tmp' }
   let(:check_cmd) { nil }
   let(:commit_cmd) { nil }
-  let(:emitter) { Merlin::Emitter.new(templates, destination, check_cmd, commit_cmd) }
+  let(:emitter) { Merlin::Emitter.new(templates, destination) }
   after(:each) do
     # delete everything in spec/tmp/
     File.unlink(*Dir.glob(File.join(destination,'*')))

@@ -4,6 +4,7 @@ require 'erubis'
 require 'fileutils'
 require 'open3'
 require 'merlin/logstub'
+require 'pathname'
 
 #TODO make template inflation and checking files for content changes multithreaded
 #TODO debounce events if configured, so we dont constantly emit configs
@@ -12,20 +13,44 @@ require 'merlin/logstub'
 module Merlin
   class Emitter
     include Logstub
-    attr_accessor :templates, :destination, :check_cmd, :commit_cmd
+    attr_accessor :templates, :destination, :static_files
+    def check_cmd
+      _template_command :check
+    end
+    def commit_cmd
+      _template_command :commit
+    end
 
-    def initialize(templates,destination,check_cmd = nil, commit_cmd = nil, logger = nil)
-      @check_cmd, @commit_cmd = check_cmd, commit_cmd
+    def initialize(templates,destination, opts = {})
+      @check_cmd, @commit_cmd, @logger = opts[:check_cmd], opts[:commit_cmd], opts[:logger]
       # ensure directory is a thing
       dest = File.stat(destination)
       raise "#{destination} not a directory" unless dest.directory?
       raise "#{destination} not a writable" unless dest.writable?
-      @destination = destination
+      @destination = File.absolute_path destination
       #ensure templates are readable
       unreadable = templates.keys.reject{|t| File.readable? t}
       raise "Unable to read templates: #{unreadable.inspect}" unless unreadable.empty?
-      @templates = templates
-      @logger = logger
+
+      # if static_files given, make sure they are all readable
+      @static_files = []
+      if ! opts[:static_files].nil? && ! opts[:static_files].empty?
+        puts opts[:static_files].inspect
+        unreadable_static = opts[:static_files].reject{|f| File.readable?(f) && !File.directory?(f)}
+        raise "Unable to read static files: #{unreadable_static.join ','}" unless unreadable_static.empty?
+        @static_files = opts[:static_files].map{|f| File.absolute_path f}
+      end
+      # resolve templates and outputs to absolute if not already
+      abs_template_map = templates.map do |f,out|
+        abs_f = File.absolute_path(f)
+        abs_out = if Pathname.new(out).absolute?
+            out # just use the absolute pathname for the output file
+          else
+            File.join destination, out # it is relative to destination
+          end
+        [abs_f, abs_out]
+      end
+      @templates = Hash[abs_template_map]
     end
 
     def emit data
@@ -47,7 +72,7 @@ module Merlin
       target_output = Hash[files]
       # write files out targets if they have changed
       updated_targets = target_output.map do |target,output|
-        target = File.join(destination,target)
+        #target = File.join(destination,target)
         og_hash = if File.readable? target
             Digest::SHA256.file(target).hexdigest
           else
@@ -64,6 +89,7 @@ module Merlin
             logger.debug "Copying #{target} to #{backup}"
             FileUtils.cp target, backup
           end
+          #TODO fix writing targets to point into a temp directory?
           tmptarget = File.join(File.dirname(target),".#{File.basename(target)}-#{Time.now.to_i}")
           logger.info "Writing #{tmptarget}"
           File.open(tmptarget,'w') { |f| f.write(output) }
@@ -134,6 +160,32 @@ module Merlin
       files_to_rollback.each do |target|
         logger.debug "Moving #{target[:backup]} to #{target[:file]}"
         FileUtils.mv target[:backup], target[:file]
+      end
+    end
+
+    # given a command type, expand any erb in it with exposed values
+    # type is one of [:check, :commit]
+    def _template_command type
+      # ignore missing commands
+      command = case type
+      when :check
+        @check_cmd
+      when :commit
+        @commit_cmd
+      else
+        raise "I dont know what a #{type} command is!"
+      end
+      return nil if command.nil?
+      begin
+        destination = @destination
+        static_outputs = @static_files
+        dynamic_outputs = @templates.values
+        outputs = static_outputs + dynamic_outputs
+        erb = Erubis::Eruby.new(command)
+        erb.result(binding)
+      rescue => e
+        logger.error "Error templating #{type} command! #{e.message}"
+        raise e
       end
     end
 

@@ -33,6 +33,16 @@ A sample config looks like this:
 * ```check_cmd```: Command to run to verify the output of the emitter is correct (i.e. service httpd configtest). If this fails, merlin will roll back the configs.
 * ```commit_cmd```: Command to commit results once checked (i.e. cd ... && git commit -am ... && git push origin HEAD)
 
+Additionally, both check_cmd and commit_cmd can use ERB to template in a handful of useful variables. i.e.
+
+    check_cmd: "/usr/bin/check_files -d <%= destination %>"
+    commit_cmd: "git add <%= outputs.join " " %> && git commit -m '...' && git push"
+
+* ```destination```: Directory where template outputs and static files are written for this stage.
+* ```outputs```: Array of fully qualified files output by this stage. Includes static and templated files.
+* ```static_outputs```: Array of fully qualified static files.
+* ```dynamic_outputs```: Array of fully qualified template output files.
+
 ## Templates
 
 A sample template using embedded Ruby. The data that you are watching for at "watch" will be available in ```data```.
@@ -126,6 +136,7 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 ## TODO
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
+* make sure filewatcher is converting to absolute path
 * static_files should have a destination as well, and be copied into ```destination``` when changed. Also should trigger commit check
 * Is Etcd::Client thread safe? (bin/merlin)
 * Finish test suite! write tests for the CLI.

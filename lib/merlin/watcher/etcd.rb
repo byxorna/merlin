@@ -7,11 +7,11 @@ module Merlin
     include Logstub
     attr_reader :running, :index, :path, :client
 
-    def initialize(client,path,logger=nil)
+    def initialize client, path, opts={}
       @path = path
       @client = client
       @running = false
-      @logger = logger
+      @logger = opts[:logger]
     end
 
     def get &block

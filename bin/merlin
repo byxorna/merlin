@@ -62,14 +62,18 @@ if @options[:mode] == :watch
   #TODO this should spawn a bunch of threads to watch?
   watchers = targets.inject({}) do |memo, (name, config)|
     logger.info "Starting up emitter for #{name}"
-    emitter = Merlin::Emitter.new(config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'], logger)
+    emitter = Merlin::Emitter.new(config['templates'], config['destination'],
+      :check_cmd => config['check_cmd'],
+      :commit_cmd => config['commit_cmd'],
+      :static_files => config['static_files'],
+      :logger => logger)
     # TODO figure out if the Etcd::Client is thread safe, or if we need a separate instace per emitter/watcher pair
     begin
       client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
     rescue => e
       abort "Unable to configure etcd client: #{e.message}"
     end
-    watcher = Merlin::EtcdWatcher.new(client, config['watch'], logger)
+    watcher = Merlin::EtcdWatcher.new(client, config['watch'], :logger => logger)
     # lets get the current state first, and begin observing from that modified_index
     d = watcher.get
     # this way we will trigger a watch immediately on startup
@@ -123,13 +127,17 @@ if @options[:mode] == :watch
   end
 else
   targets.each do |name, config|
-    emitter = Merlin::Emitter.new(config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'], logger)
+    emitter = Merlin::Emitter.new(config['templates'], config['destination'],
+      :check_cmd => config['check_cmd'],
+      :commit_cmd => config['commit_cmd'],
+      :static_files => config['static_files'],
+      :logger => logger)
     begin
       client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
     rescue => e
       abort "Unable to configure etcd client: #{e.message}"
     end
-    watcher = Merlin::EtcdWatcher.new(client, config['watch'], logger)
+    watcher = Merlin::EtcdWatcher.new(client, config['watch'], :logger => logger)
     emitter.emit watcher.get
   end
 end
