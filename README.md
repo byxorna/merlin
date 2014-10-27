@@ -26,6 +26,13 @@ A sample config looks like this:
       check_cmd: haproxy -f /etc/haproxy/haproxy.cfg -c
       commit_cmd: service haproxy reload
 
+* ```watch```: What keyspace in etcd to watch for changes. The whole tree at ```watch``` will be passed to your templates as ```data```.
+* ```templates```: Key is the path to a template in ERuby; the value is the path relative to ```destination``` you want the templated file to go.
+* ```destination```: What directory should all of the output be relative to. If omitted, assumes output is relative to pwd.
+* ```static_files```: Additional static files that should be watched on the filesystem to trigger a config generation if modified.
+* ```check_cmd```: Command to run to verify the output of the emitter is correct (i.e. service httpd configtest). If this fails, merlin will roll back the configs.
+* ```commit_cmd```: Command to commit results once checked (i.e. cd ... && git commit -am ... && git push origin HEAD)
+
 ## Templates
 
 A sample template using embedded Ruby. The data that you are watching for at "watch" will be available in ```data```.
@@ -57,27 +64,46 @@ Used to just generate configs once, and then quit.
 
 ### Watcher
 
-Watch and react to changes in etcd and emit new configs:
+Watch and react to changes in etcd and emit new configs. Both the ```watch``` path in your config, as well as any static files and templates will be watched for changes, and a new set of configs will be emitted whenever any of those change. You can also trigger a refresh by sending the process ```SIGHUP``` or ```SIGUSR1```.
 
-    $ merlin -c config/example/config.yaml -d
-    D, [2014-10-24T23:12:17.415651 #89409] DEBUG -- : Watching /merlin/testing with index nil
-    I, [2014-10-24T23:12:49.974194 #89409]  INFO -- : Watch fired for /merlin/testing: set /merlin/testing/whooo with modified index 151
-    D, [2014-10-24T23:12:49.974258 #89409] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-24T23:12:49.978052 #89409]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-24T23:12:49.986011 #89409] DEBUG -- : /tmp/testing/testing.conf SHA256: a52e73aa22f7840c4abaa92349552d1a264b45be245cd522fad9a4a330d98c01, new contents: e790c96c5ab002129426d26b7a475334a9f1e8df34f67d01a56292878af98bde
-    D, [2014-10-24T23:12:49.986099 #89409] DEBUG -- : Moving /tmp/testing/testing.conf to /tmp/testing/testing.conf.bak
-    I, [2014-10-24T23:12:49.986417 #89409]  INFO -- : Writing /tmp/testing/testing.conf
-    I, [2014-10-24T23:12:49.986857 #89409]  INFO -- : No check command specified, skipping check
-    I, [2014-10-24T23:12:49.986896 #89409]  INFO -- : No commit command specified, skipping check
-    I, [2014-10-24T23:13:24.354541 #89409]  INFO -- : Watch fired for /merlin/testing: set /merlin/testing/anotherone with modified index 152
-    D, [2014-10-24T23:13:24.354607 #89409] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-24T23:13:24.364658 #89409]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-24T23:13:24.365068 #89409] DEBUG -- : /tmp/testing/testing.conf SHA256: e790c96c5ab002129426d26b7a475334a9f1e8df34f67d01a56292878af98bde, new contents: c4edcb107fcf8275f8e7252c449e49e30afee81ce01425e46e52370c7fe225b5
-    D, [2014-10-24T23:13:24.365119 #89409] DEBUG -- : Moving /tmp/testing/testing.conf to /tmp/testing/testing.conf.bak
-    I, [2014-10-24T23:13:24.365353 #89409]  INFO -- : Writing /tmp/testing/testing.conf
-    I, [2014-10-24T23:13:24.365582 #89409]  INFO -- : No check command specified, skipping check
-    I, [2014-10-24T23:13:24.365617 #89409]  INFO -- : No commit command specified, skipping check
-    ^C
+    $ merlin -c config/example/config.yaml
+    I, [2014-10-27T08:29:10.309085 #56169]  INFO -- : Starting up emitter for testing
+    D, [2014-10-27T08:29:10.309208 #56169] DEBUG -- : Getting /merlin/testing
+    D, [2014-10-27T08:29:10.330709 #56169] DEBUG -- : Started etcd watch thread at /merlin/testing with index 170
+    D, [2014-10-27T08:29:10.330778 #56169] DEBUG -- : Awaiting index 170 at /merlin/testing
+    D, [2014-10-27T08:29:10.330642 #56169] DEBUG -- : Watching for changes to config/examples/static/test.txt
+    D, [2014-10-27T08:29:10.331188 #56169] DEBUG -- : Starting listener
+    I, [2014-10-27T08:29:10.337268 #56169]  INFO -- : Watch fired for /merlin/testing: delete /merlin/testing/new with etcd index 170 and modified index 170
+    D, [2014-10-27T08:29:10.337374 #56169] DEBUG -- : Getting /merlin/testing
+    I, [2014-10-27T08:29:10.351636 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
+    D, [2014-10-27T08:29:10.353350 #56169] DEBUG -- : Watching for changes to config/examples/templates/testing.conf.erb
+    D, [2014-10-27T08:29:10.353486 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e, new contents: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e
+    I, [2014-10-27T08:29:10.353941 #56169]  INFO -- : No change to /tmp/testing/testing.conf
+    D, [2014-10-27T08:29:10.353994 #56169] DEBUG -- : Awaiting index 171 at /merlin/testing
+    D, [2014-10-27T08:29:10.353874 #56169] DEBUG -- : Starting listener
+    I, [2014-10-27T08:29:40.763007 #56169]  INFO -- : Watch fired for /merlin/testing: set /merlin/testing/new_key with etcd index 170 and modified index 171
+    D, [2014-10-27T08:29:40.763115 #56169] DEBUG -- : Getting /merlin/testing
+    I, [2014-10-27T08:29:40.770235 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
+    D, [2014-10-27T08:29:40.770806 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e, new contents: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42
+    D, [2014-10-27T08:29:40.770857 #56169] DEBUG -- : Copying /tmp/testing/testing.conf to /tmp/testing/testing.conf.bak
+    I, [2014-10-27T08:29:40.771117 #56169]  INFO -- : Writing /tmp/testing/testing.conf
+    I, [2014-10-27T08:29:40.771253 #56169]  INFO -- : Running check command: echo "Checking..."
+    D, [2014-10-27T08:29:40.772959 #56169] DEBUG -- : Started pid 56422
+    D, [2014-10-27T08:29:40.774881 #56169] DEBUG -- : Checking...
+    D, [2014-10-27T08:29:40.775252 #56169] DEBUG -- : Process exited: pid 56422 exit 0
+    I, [2014-10-27T08:29:40.775331 #56169]  INFO -- : Check succeeded
+    I, [2014-10-27T08:29:40.775392 #56169]  INFO -- : Running commit command: echo "This is the commit command"
+    D, [2014-10-27T08:29:40.776808 #56169] DEBUG -- : Started pid 56424
+    D, [2014-10-27T08:29:40.779286 #56169] DEBUG -- : This is the commit command
+    D, [2014-10-27T08:29:40.779640 #56169] DEBUG -- : Process exited: pid 56424 exit 0
+    I, [2014-10-27T08:29:40.779743 #56169]  INFO -- : Commit succeeded
+    D, [2014-10-27T08:29:40.779797 #56169] DEBUG -- : Awaiting index 172 at /merlin/testing
+    W, [2014-10-27T08:30:14.548725 #56169]  WARN -- : Received reload request
+    D, [2014-10-27T08:30:14.548872 #56169] DEBUG -- : Getting /merlin/testing
+    I, [2014-10-27T08:30:14.562458 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
+    D, [2014-10-27T08:30:14.562974 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42, new contents: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42
+    I, [2014-10-27T08:30:14.563004 #56169]  INFO -- : No change to /tmp/testing/testing.conf
+    ^CD, [2014-10-27T08:30:35.857303 #56169] DEBUG -- : Terminating watchers for testing
     $ cat /tmp/testing/testing.conf
     This is a template
       /merlin/testing/anotherone: aww yea
@@ -100,7 +126,9 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 ## TODO
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
-* Finish test suite! Fix what may be broken in FileWatcher, and write tests for the CLI.
+* static_files should have a destination as well, and be copied into ```destination``` when changed. Also should trigger commit check
+* Is Etcd::Client thread safe? (bin/merlin)
+* Finish test suite! write tests for the CLI.
 * Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)
 * Config validation (bin/merlin)
 * Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)

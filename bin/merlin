@@ -14,20 +14,24 @@ require 'logger'
   :debug => false,
   :daemonize => false,
   :etcd_server => 'localhost',
-  :etcd_port => 4001
+  :etcd_port => 4001,
+  :file_watch => true
 }
 
 OptionParser.new do |opts|
   opts.on('-h','--help','Show help') { puts opts ; exit 0 }
   opts.on('-o','--oneshot','Run a single generation; dont watch for changes') {@options[:mode] = :oneshot}
-  opts.on('-c','--config CONFIG',String,"Use config (Default: #{@defaults[:config]})"){|v| @options[:config] = v}
-  opts.on('-d','--debug','Enable debugging'){ @options[:debug] = true}
-  opts.on('-D','--daemonize','Daemonize process'){ @options[:daemonize] = true}
+  opts.on('-c','--config CONFIG',String,"Use templates config (Default: #{@defaults[:config]})"){|v| @options[:config] = v}
+  # TODO implement --debug
+  #opts.on('-d','--debug','Enable debugging'){ @options[:debug] = true}
+  # TODO implement me
+  #opts.on('-D','--daemonize','Daemonize process'){ @options[:daemonize] = true}
   opts.on('-e','--etcd SERVER[:PORT]',String,"Etcd server and optional port (Default #{@defaults[:etcd_server]}:#{@defaults[:etcd_port]})") do |v|
     host,port = v.split ':'
     @options[:etcd_server] = host
     @options[:etcd_port] = port unless port.nil?
   end
+  opts.on('--[no-]filewatch',"Watch files on disk for changes while watching (Default: #{@defaults[:file_watch]})"){|v| @options[:file_watch] = v}
 end.parse!
 
 @options = @defaults.merge @options
@@ -56,8 +60,10 @@ logger = Logger.new STDOUT
 
 if @options[:mode] == :watch
   #TODO this should spawn a bunch of threads to watch?
-  watchers = targets.inject({:etcd => [], :files => []}) do |memo, (name, config)|
+  watchers = targets.inject({}) do |memo, (name, config)|
+    logger.info "Starting up emitter for #{name}"
     emitter = Merlin::Emitter.new(config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'], logger)
+    # TODO figure out if the Etcd::Client is thread safe, or if we need a separate instace per emitter/watcher pair
     begin
       client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
     rescue => e
@@ -73,19 +79,48 @@ if @options[:mode] == :watch
       end
     end
     watcher.observe d.etcd_index, &emit_blk
-    static_watchers = config['static_files'].map do |f|
-      Merlin::FileWatcher.new(f, logger).observe(&emit_blk)
+    file_watchers = []
+    if @options[:file_watch]
+      file_watchers = (config['static_files'] + config['templates'].keys).map do |f|
+        Merlin::FileWatcher.new(f, logger).observe(&emit_blk)
+      end
     end
-    memo[:etcd] << watcher
-    memo[:files] = memo[:files] + static_watchers
+    memo[name] = {
+      :emit_blk => emit_blk,
+      :etcd => watcher,
+      :files => file_watchers
+    }
     memo
   end
   Kernel.at_exit do
-    puts "terminating watchers"
-    watchers[:etcd].each(&:terminate)
-    watchers[:files].each(&:stop)
+    watchers.each do |name,refs|
+      logger.debug "Terminating watchers for #{name}"
+      refs[:etcd].terminate
+      refs[:files].each(&:stop)
+    end
   end
-  sleep
+
+  # ghetto event loop, just for handling signals (for now)
+  # TODO maybe replace with event machine?
+  events = []
+  trap :USR1 do
+    events << :USR1
+  end
+  trap :HUP do
+    events << :HUP
+  end
+  loop do
+    while !events.empty?
+      e = events.shift
+      if [:HUP, :USR1].include? e
+        logger.warn "Received reload request"
+        watchers.each {|target,refs| refs[:emit_blk].call}
+      else
+        logger.warn "Received unknown event #{e}; ignoring"
+      end
+    end
+    sleep 0.1
+  end
 else
   targets.each do |name, config|
     emitter = Merlin::Emitter.new(config['templates'], config['destination'], config['check_cmd'], config['commit_cmd'], logger)
