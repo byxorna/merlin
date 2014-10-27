@@ -1,5 +1,7 @@
 require 'spec_helper'
 require 'fileutils'
+# TODO this is super shitty to have these sleeps sprinkled around.
+# Need to figure out a good way to handle the concurrency of this Listener module
 
 describe Merlin::FileWatcher do
   let(:path) { 'spec/tmp' }
@@ -13,25 +15,19 @@ describe Merlin::FileWatcher do
   context "observe" do
     it "watches a file" do
       modified = false
-      watcher.observe do |f|
-        puts f.inspect
-        modified = true
-      end
-      expect{File.read(filename)}.to raise_error Errno::ENOENT
+      File.open(filename,'w'){|f| f.write 'contents'}
+      watcher.observe {|f| modified = true }
+      expect(watcher.processing?).to eq(true)
+      sleep 1
       FileUtils.touch(filename)
-
-      sleep 1 # give it time if its in polling mode
-      watcher.stop
+      sleep 1 # give it time if Listen is in polling mode
       expect(modified).to eq(true)
     end
     it "ignores other files" do
       modified = false
-      watcher.observe do |f|
-        modified = true
-      end
+      watcher.observe {|f| modified = true }
       FileUtils.touch(File.join(path,'different_file'))
       sleep 1 # give it time if its in polling mode
-      watcher.stop
       expect(modified).to be false
     end
   end

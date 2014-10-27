@@ -47,7 +47,7 @@ module Merlin
             logger.info "Watch fired for #{path}: #{val.action} #{val.node.key} with etcd index #{val.etcd_index} and modified index #{val.node.modified_index}"
             # lets watch for the next event from modified index
             index = val.node.modified_index + 1
-            block.call(val)
+            yield val
           end
         end
       end

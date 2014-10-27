@@ -15,14 +15,14 @@ module Merlin
     end
 
     def observe &block
+      raise "You should give me a block" unless block_given?
       #TODO listen to a directory, yield block whenever there is a change
       logger.debug "Watching for changes to #{filename}"
       @listener = Listen.to(File.dirname(filename), :only => %r|#{File.basename filename}|) do |mod,add,del|
-      #@listener = Listen.to(File.dirname(filename)) do |mod,add,del|
         unless mod.empty?
           logger.debug "Static files changed: #{mod.inspect}"
           # run the block if the file was modified
-          block.call(mod) unless mod.empty?
+          yield mod unless mod.empty?
         end
       end
       logger.debug "Starting listener"
