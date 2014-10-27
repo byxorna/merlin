@@ -76,45 +76,62 @@ module Merlin
     private
     def _check_and_commit updated_targets
       success = true
-      unless updated_targets.empty?
-        {:check => check_cmd, :commit => commit_cmd}.each do |type,cmd|
-          if cmd.nil?
-            logger.info "No #{type} command specified, skipping check"
-          else
-            logger.info "Running #{type} command: #{cmd}"
-            res = Open3.popen2e(cmd) do |stdin, output, th|
-              stdin.close
-              pid = th.pid
-              logger.debug "Started pid #{pid}"
-              output.each {|l| logger.debug l.strip }
-              status = th.value
-              logger.debug "Process exited: #{status.to_s}"
-              status
-            end
-            if res.success?
-              logger.info "#{type.capitalize} succeeded"
+      failed_command = nil
+      begin
+        unless updated_targets.empty?
+          {:check => check_cmd, :commit => commit_cmd}.each do |type,cmd|
+            if cmd.nil?
+              logger.info "No #{type} command specified, skipping check"
             else
-              success = false
-              logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
-              if type == :check
-                files_to_rollback = updated_targets.reject {|x| x[:backup].nil? }
-                files_to_remove = updated_targets.select{|x| x[:backup].nil? }.map{|x| x[:file]}
-                logger.warn "Performing rollback of modified files"
-                unless files_to_remove.empty?
-                  logger.debug "Removing #{files_to_remove.join " "}"
-                  File.unlink(*files_to_remove)
+              logger.info "Running #{type} command: #{cmd}"
+              begin
+                res = Open3.popen2e(cmd) do |stdin, output, th|
+                  stdin.close
+                  pid = th.pid
+                  logger.debug "Started pid #{pid}"
+                  output.each {|l| logger.debug l.strip }
+                  status = th.value
+                  logger.debug "Process exited: #{status.to_s}"
+                  status
                 end
-                files_to_rollback.each do |target|
-                  logger.debug "Moving #{target[:backup]} to #{target[:file]}"
-                  FileUtils.mv target[:backup], target[:file]
+                if res.success?
+                  logger.info "#{type.capitalize} succeeded"
+                else
+                  logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
+                  success = false
+                  failed_command = type
+                  break
                 end
+              rescue => e
+                logger.error "Error encountered running #{type} command: #{e.message}"
+                success = false
+                failed_command = type
+                break
               end
-              break
             end
           end
         end
+        return success
+      ensure
+        # we want to roll back files only if check failed
+        if failed_command == :check && success == false
+          _rollback updated_targets
+        end
       end
-      return success
+    end
+
+    def _rollback updated_targets
+      files_to_rollback = updated_targets.reject {|x| x[:backup].nil? }
+      files_to_remove = updated_targets.select{|x| x[:backup].nil? }.map{|x| x[:file]}
+      logger.warn "Performing rollback of modified files"
+      unless files_to_remove.empty?
+        logger.debug "Removing #{files_to_remove.join " "}"
+        File.unlink(*files_to_remove)
+      end
+      files_to_rollback.each do |target|
+        logger.debug "Moving #{target[:backup]} to #{target[:file]}"
+        FileUtils.mv target[:backup], target[:file]
+      end
     end
 
   end
