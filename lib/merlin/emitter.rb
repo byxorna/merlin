@@ -4,6 +4,7 @@ require 'erubis'
 require 'fileutils'
 require 'open3'
 require 'merlin/logstub'
+require 'merlin/util'
 require 'pathname'
 
 #TODO make template inflation and checking files for content changes multithreaded
@@ -33,24 +34,17 @@ module Merlin
       raise "Unable to read templates: #{unreadable.inspect}" unless unreadable.empty?
 
       # if static_files given, make sure they are all readable
-      @static_files = []
+      # and resolve them to be absolute
+      @static_files = {}
       if ! opts[:static_files].nil? && ! opts[:static_files].empty?
-        puts opts[:static_files].inspect
-        unreadable_static = opts[:static_files].reject{|f| File.readable?(f) && !File.directory?(f)}
+        static_files = Util.make_absolute_path_hash(opts[:static_files], @destination)
+        puts static_files.inspect
+        unreadable_static = static_files.keys.reject{|f| File.readable?(f) && !File.directory?(f)}
         raise "Unable to read static files: #{unreadable_static.join ','}" unless unreadable_static.empty?
-        @static_files = opts[:static_files].map{|f| File.absolute_path f}
+        @static_files = static_files
       end
       # resolve templates and outputs to absolute if not already
-      abs_template_map = templates.map do |f,out|
-        abs_f = File.absolute_path(f)
-        abs_out = if Pathname.new(out).absolute?
-            out # just use the absolute pathname for the output file
-          else
-            File.join destination, out # it is relative to destination
-          end
-        [abs_f, abs_out]
-      end
-      @templates = Hash[abs_template_map]
+      @templates = Util.make_absolute_path_hash(templates,@destination)
     end
 
     def emit data
@@ -103,6 +97,7 @@ module Merlin
     end
 
     private
+
     def _check_and_commit updated_targets
       success = true
       failed_command = nil

@@ -44,21 +44,20 @@ describe Merlin::Emitter do
     it "runs check command" do
       test_file = File.join(destination,"test")
       expect{File.read(test_file)}.to raise_error Errno::ENOENT
-      emitter.stub(:check_cmd) { "touch #{test_file}" }
+      allow(emitter).to receive_messages(:check_cmd => "touch #{test_file}")
       emitter.emit(data)
       expect(File.read(test_file)).to eq('')
     end
     it "runs commit command" do
       test_file = File.join(destination,"commit_success")
       expect{File.read(test_file)}.to raise_error Errno::ENOENT
-      emitter.stub(:commit_cmd) { "touch #{test_file}" }
+      allow(emitter).to receive_messages(:commit_cmd => "touch #{test_file}")
       emitter.emit(data)
       expect(File.read(test_file)).to eq('')
     end
     it "doesnt run commit if check fails" do
       test_file = File.join(destination,"shouldnt_exist")
-      emitter.stub(:check_cmd) { "exit 1" }
-      emitter.stub(:commit_cmd) { "touch #{test_file}" }
+      allow(emitter).to receive_messages(:check_cmd => "exit 1", :commit_cmd => "touch #{test_file}")
       res = emitter.emit(data)
       expect(res).to eq(false)
       expect{File.read(test_file)}.to raise_error Errno::ENOENT
@@ -67,7 +66,7 @@ describe Merlin::Emitter do
       file = File.join(destination, 'test')
       res = emitter.emit(data)
       expect(res).to eq(true)
-      emitter.stub(:check_cmd) { "touch #{file}" }
+      allow(emitter).to receive_messages(:check_cmd => "touch #{file}")
       res = emitter.emit(data)
       expect(res).to eq(true)
       expect{File.read(file)}.to raise_error Errno::ENOENT
@@ -75,7 +74,7 @@ describe Merlin::Emitter do
     it "replaces files if check fails" do
       existing_file = File.join(destination,"a.conf")
       File.open(existing_file,'w') {|f| f.write "original file"}
-      emitter.stub(:check_cmd) { "exit 1" }
+      allow(emitter).to receive_messages(:check_cmd => "exit 1")
       res = emitter.emit(data)
       expect(res).to eq(false)
       expect(File.read(existing_file)).to eq("original file")
