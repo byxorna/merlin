@@ -19,10 +19,10 @@ module Merlin
       #TODO listen to a directory, yield block whenever there is a change
       logger.debug "Watching for changes to #{filename}"
       @listener = Listen.to(File.dirname(filename), :only => %r|#{File.basename filename}|) do |mod,add,del|
+        # run the block if the file was modified
         unless mod.empty?
           logger.debug "Static files changed: #{mod.inspect}"
-          # run the block if the file was modified
-          yield mod unless mod.empty?
+          yield mod
         end
       end
       logger.debug "Starting listener"
