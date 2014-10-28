@@ -18,20 +18,23 @@ A sample config looks like this:
         - config/examples/static/test.txt
       check_cmd: echo "Check command"
       commit_cmd: echo "Commit command"
-    haproxy:
-      watch: /merlin/haproxy
+    named:
+      watch: /merlin/named
       templates:
-        "config/haproxy/haproxy.conf.erb": haproxy.cfg
-      destination: /etc/haproxy
-      check_cmd: haproxy -f /etc/haproxy/haproxy.cfg -c
-      commit_cmd: service haproxy reload
+        "config/named/company.net.erb": company.net
+        "config/named/domain.company.net.erb": domain.company.net
+      destination: /var/named
+      static_files:
+        /opt/repos/named/domain.company.net-custom: domain.company.net-custom
+      check_cmd: "/usr/bin/check_zones <%= outputs.join ' ' %>"
+      commit_cmd: service named reload
 
 * ```watch```: What keyspace in etcd to watch for changes. The whole tree at ```watch``` will be passed to your templates as ```data```.
 * ```templates```: Key is the path to a template in ERuby; the value is the path relative to ```destination``` you want the templated file to go.
 * ```destination```: What directory should all of the output be relative to. If omitted, assumes output is relative to pwd.
-* ```static_files```: Additional static files that should be watched on the filesystem to trigger a config generation if modified.
-* ```check_cmd```: Command to run to verify the output of the emitter is correct (i.e. service httpd configtest). If this fails, merlin will roll back the configs.
-* ```commit_cmd```: Command to commit results once checked (i.e. cd ... && git commit -am ... && git push origin HEAD)
+* ```static_files```: Additional static files that should be watched on the filesystem to trigger a config generation if modified. These can be a list of files, relative to pwd, or absolute. If ```static_files``` is a hash of input -> output, output is relative to ```destination``` unless output is absolute.
+* ```check_cmd```: Command to run to verify the output of the emitter is correct (i.e. service httpd configtest). If this fails, merlin will roll back the configs. Allows erb expansion.
+* ```commit_cmd```: Command to commit results once checked (i.e. cd ... && git commit -am ... && git push origin HEAD). Allows erb expansion.
 
 Additionally, both check_cmd and commit_cmd can use ERB to template in a handful of useful variables. i.e.
 

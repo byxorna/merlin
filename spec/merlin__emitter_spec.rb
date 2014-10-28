@@ -23,11 +23,16 @@ describe Merlin::Emitter do
     "spec/templates/a.conf.erb" => "a.conf",
     "spec/templates/b.conf.erb" => "b.conf"
   }}
+  let(:static_files) {{
+    "spec/src/static1.txt" => "static1.txt",
+    "spec/src/static2.txt" => "static2.txt"
+  }}
   let(:destination) { 'spec/tmp' }
   let(:check_cmd) { nil }
   let(:commit_cmd) { nil }
   let(:test_file) { File.join(destination,"test_file") }
   let(:emitter) { Merlin::Emitter.new(templates, destination) }
+  let(:static_emitter) { Merlin::Emitter.new(templates, destination, :static_files => static_files) }
   after(:each) do
     # delete everything in spec/tmp/
     File.unlink(*Dir.glob(File.join(destination,'*')))
@@ -60,7 +65,7 @@ describe Merlin::Emitter do
       expect(res).to eq(false)
       expect{File.read(test_file)}.to raise_error Errno::ENOENT
     end
-    it "doesnt run check if no changes to output" do
+    it "doesnt run check if no changes to template output" do
       file = File.join(destination, 'test')
       res = emitter.emit(data)
       expect(res).to eq(true)
@@ -69,13 +74,25 @@ describe Merlin::Emitter do
       expect(res).to eq(true)
       expect{File.read(file)}.to raise_error Errno::ENOENT
     end
-    it "replaces files if check fails" do
+    it "rolls back template output files if check fails" do
       existing_file = File.join(destination,"a.conf")
       File.open(existing_file,'w') {|f| f.write "original file"}
       allow(emitter).to receive_messages(:check_cmd => "exit 1")
       res = emitter.emit(data)
       expect(res).to eq(false)
       expect(File.read(existing_file)).to eq("original file")
+    end
+    it "rolls back static output files if check fails" do
+      static_outputs = static_emitter.static_files.values
+      s1,s2 = static_outputs
+      static_outputs.each do |s|
+        File.open(s,'w'){|f| f.write "testing"}
+      end
+      allow(static_emitter).to receive_messages(:check_cmd => "exit 1")
+      res = static_emitter.emit(data)
+      expect(res).to eq(false)
+      expect(File.read(s1)).to eq("testing")
+      expect(File.read(s2)).to eq("testing")
     end
     it "templates commands with destination" do
       emitter.instance_variable_set(:@check_cmd,"echo '<%= destination %>' > #{test_file}")

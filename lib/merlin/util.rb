@@ -16,7 +16,7 @@ module Merlin
       pairs = input_output.map do |infile,outfile|
         # input file is always relative to pwd, so just blindly absolutify
         abs_infile = File.absolute_path(infile)
-        # output file is relative to
+        # output file is relative to outdir if not already absolute
         abs_outfile = if Pathname.new(outfile).absolute?
             outfile # just use the absolute pathname for the output file
           else
