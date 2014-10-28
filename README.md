@@ -138,6 +138,8 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
 * make sure filewatcher is converting to absolute path
 * static_files should have a destination as well, and be copied into ```destination``` when changed. Also should trigger commit check
+  * this should be implemented as so:
+    * generate configs into a tempdir
 * Is Etcd::Client thread safe? (bin/merlin)
 * Finish test suite! write tests for the CLI.
 * Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)

@@ -38,7 +38,6 @@ module Merlin
       @static_files = {}
       if ! opts[:static_files].nil? && ! opts[:static_files].empty?
         static_files = Util.make_absolute_path_hash(opts[:static_files], @destination)
-        puts static_files.inspect
         unreadable_static = static_files.keys.reject{|f| File.readable?(f) && !File.directory?(f)}
         raise "Unable to read static files: #{unreadable_static.join ','}" unless unreadable_static.empty?
         @static_files = static_files
@@ -173,7 +172,7 @@ module Merlin
       return nil if command.nil?
       begin
         destination = @destination
-        static_outputs = @static_files
+        static_outputs = @static_files.values
         dynamic_outputs = @templates.values
         outputs = static_outputs + dynamic_outputs
         erb = Erubis::Eruby.new(command)
