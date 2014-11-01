@@ -4,162 +4,176 @@ require 'erubis'
 require 'fileutils'
 require 'open3'
 require 'merlin/logstub'
-require 'merlin/util'
-require 'pathname'
+require 'tmpdir'
+require 'merlin/monkey_patch/pathname'
 
-#TODO make template inflation and checking files for content changes multithreaded
 #TODO debounce events if configured, so we dont constantly emit configs
-#TODO support changes to the static assets as well
 
 module Merlin
   class Emitter
     include Logstub
-    attr_accessor :templates, :destination, :static_files
-    def check_cmd
-      _template_command :check
-    end
-    def commit_cmd
-      _template_command :commit
-    end
+    attr_accessor :destination, :template_map, :static_map
 
-    def initialize(templates,destination, opts = {})
+    def initialize(name, template_map, destination, opts = {})
       @check_cmd, @commit_cmd, @logger = opts[:check_cmd], opts[:commit_cmd], opts[:logger]
-      # ensure directory is a thing
-      dest = File.stat(destination)
-      raise "#{destination} not a directory" unless dest.directory?
-      raise "#{destination} not a writable" unless dest.writable?
-      @destination = File.absolute_path destination
-      #ensure templates are readable
-      unreadable = templates.keys.reject{|t| File.readable? t}
-      raise "Unable to read templates: #{unreadable.inspect}" unless unreadable.empty?
-
-      # if static_files given, make sure they are all readable
-      # and resolve them to be absolute
-      @static_files = {}
-      if ! opts[:static_files].nil? && ! opts[:static_files].empty?
-        static_files = Util.make_absolute_path_hash(opts[:static_files], @destination)
-        unreadable_static = static_files.keys.reject{|f| File.readable?(f) && !File.directory?(f)}
-        raise "Unable to read static files: #{unreadable_static.join ','}" unless unreadable_static.empty?
-        @static_files = static_files
+      @name = name
+      # atomic commit means we will atomically mv the tmp output dir to destination
+      # if not set, we will copy each file into the destination before committing
+      @atomic = opts[:atomic] ? true : false
+      @destination = Pathname.new(destination)
+      if @atomic
+        if @destination.directory? && !@destination.symlink?
+          # ensure destination is either absent, or a symlink and not a directory
+          raise "Destination #{destination} must not be a directory when using atomic=true"
+        end
+      elsif !@destination.directory?
+        raise "Destination #{destination} not a directory"
       end
-      # resolve templates and outputs to absolute if not already
-      @templates = Util.make_absolute_path_hash(templates,@destination)
+      unless opts[:tmp].nil?
+        @custom_tmp = Pathname.new(opts[:tmp])
+        raise "Custom tmp #{@custom_tmp} not a directory" unless @custom_tmp.directory?
+        raise "Custom tmp #{@custom_tmp} not a writable" unless @custom_tmp.writable?
+      end
+      raise "You should give me something to template" if template_map.empty?
+      @template_map = template_map
+      # and test the same for all static files
+      if opts[:statics].is_a? Enumerable and ! opts[:statics].is_a? Hash
+        static_map = Hash[opts[:statics].map {|f| [f,Pathname.new(f).basename]}]    # make map of input->output
+      else
+        static_map = opts[:statics] || {}                    # assume empty if missin_map
+      end
+      @static_map = static_map
+      # all outputs must be relative. raise if not
+      static_map.each {|i,o| raise "Static file output #{o} must be relative!" unless Pathname.new(o).relative? }
+      template_map.each {|i,o| raise "Template output #{o} must be relative!" unless Pathname.new(o).relative? }
     end
 
+
+    # returns a boolean of update success
+    # true if there were changes, and the check and commit succeeded
+    # false otherwise (i.e. any check or commit failures, template exceptions, etc)
     def emit data
-      # inflate the templates
-      files = templates.map do |template,target|
+      target_output = template_map.map do |template,target|
         begin
-          logger.info "Templating #{template}"
+          logger.info "Expanding template #{template}"
           input = File.read(template)
           erb = Erubis::Eruby.new(input)
-          #TODO can we create a custom binding that only has variables we want to be scoped in it?
-          output = erb.result(binding)
+          output = erb.result({ :data => data })
+          [target,output]
         rescue => e
-          logger.error "Error templating #{template}: #{e.message}"
+          logger.error "Error expanding template #{template}: #{e.message}"
           raise e
         end
-        [target,output]
       end
-      # map template name to new output
-      target_output = Hash[files]
-      # write files out targets if they have changed
-      updated_targets = target_output.map do |target,output|
-        #target = File.join(destination,target)
-        og_hash = if File.readable? target
-            Digest::SHA256.file(target).hexdigest
-          else
-            "none"
-          end
-        new_hash = Digest::SHA256.hexdigest(output)
-        logger.debug "#{target} SHA256: #{og_hash}, new contents: #{new_hash}"
-        if og_hash == new_hash
-          logger.info "No change to #{target}"
-          nil
-        else
-          if og_hash != "none"
-            backup = "#{target}.bak"
-            logger.debug "Copying #{target} to #{backup}"
-            FileUtils.cp target, backup
-          end
-          #TODO fix writing targets to point into a temp directory?
-          tmptarget = File.join(File.dirname(target),".#{File.basename(target)}-#{Time.now.to_i}")
-          logger.info "Writing #{tmptarget}"
-          File.open(tmptarget,'w') { |f| f.write(output) }
-          logger.debug "Moving #{tmptarget} to #{target}"
-          FileUtils.mv tmptarget, target
-          {:file => target, :backup => backup}
-        end
-      end.compact
+      target_output = Hash[target_output]
 
-      return _check_and_commit updated_targets
+      static_output = static_map.map do |input,target|
+        begin
+          logger.info "Reading static file #{input}"
+          output = File.read(input)
+          [target,output]
+        rescue => e
+          logger.error "Error reading static file #{input}: #{e.message}"
+          raise e
+        end
+      end
+      target_output = target_output.merge(Hash[static_output])
+      # target_output is a map of relative paths to new contents
+
+      changes_detected = target_output.any? do |target,output|
+        _contents_changed(Pathname.new(target).expand_path(destination), output)
+      end
+
+      if !changes_detected
+        logger.info "No changes detected; skipping check and commit"
+        return false
+      end
+
+      # write targets and statics to tmp, run check, and possibly rollback
+      tmp = Dir.mktmpdir(".merlin-#{@name}-",@custom_tmp)
+      logger.debug "Created tmp directory #{tmp}"
+      begin
+        target_output.each {|target,output| _write_to(target,tmp,output) }
+        success = run_command(:check, {
+          :dest => tmp,
+          :files => target_output.keys.map {|p| File.join(tmp,p)},
+        })
+        unless success
+          # rollback! just nuke the tmp directory :)
+          logger.warn "Cleaning up #{tmp} after failed check"
+          FileUtils.remove_entry_secure(tmp)
+        else
+          # perform commit
+          if @atomic
+            logger.info "Performing atomic deploy of #{tmp} to #{destination}"
+            # copy tmp to destination.$(date +%s)
+            timestamped_destination = File.join(File.dirname(destination),File.basename(destination) + "." + Time.now.to_i.to_s)
+            if File.directory? timestamped_destination
+              # TODO maybe just tack on some suffix until it doesnt exist instead of erroring?
+              logger.error "Unable to copy #{tmp} to #{timestamped_destination}; already exists"
+              raise Errno::EISDIR, timestamped_directory
+            end
+            logger.debug "Copying #{tmp} to #{timestamped_destination}"
+            FileUtils.cp_r(tmp,timestamped_destination)
+            logger.debug "Atomically linking #{destination} -> #{timestamped_destination}"
+            Pathname.new(destination).atomic_ln_sfn(timestamped_destination)
+            #TODO we should probably clean up directories (some # of changes? timewindow?)
+          else
+            logger.info "Moving outputs from #{tmp} to #{destination}"
+            target_output.keys.each do |rel_target|
+              _move_to(Pathname.new(tmp).join(rel_target), Pathname.new(destination).join(rel_target))
+            end
+          end
+          success = run_command(:commit, {
+            :dest => destination,
+            :files => target_output.keys.map {|p| File.join(destination,p)},
+          })
+        end
+        success
+      ensure
+        if Dir.exists? tmp
+          logger.debug "Cleaning up #{tmp}"
+          FileUtils.remove_entry_secure(tmp)
+        end
+      end
     end
 
     private
 
-    def _check_and_commit updated_targets
+    def run_command type, template_vars
+      cmd = template_command type, template_vars
       success = true
-      failed_command = nil
-      begin
-        unless updated_targets.empty?
-          {:check => check_cmd, :commit => commit_cmd}.each do |type,cmd|
-            if cmd.nil?
-              logger.info "No #{type} command specified, skipping check"
-            else
-              logger.info "Running #{type} command: #{cmd}"
-              begin
-                res = Open3.popen2e(cmd) do |stdin, output, th|
-                  stdin.close
-                  pid = th.pid
-                  logger.debug "Started pid #{pid}"
-                  output.each {|l| logger.debug l.strip }
-                  status = th.value
-                  logger.debug "Process exited: #{status.to_s}"
-                  status
-                end
-                if res.success?
-                  logger.info "#{type.capitalize} succeeded"
-                else
-                  logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
-                  success = false
-                  failed_command = type
-                  break
-                end
-              rescue => e
-                logger.error "Error encountered running #{type} command: #{e.message}"
-                success = false
-                failed_command = type
-                break
-              end
-            end
+      if cmd.nil?
+        logger.info "No #{type} command specified, skipping check"
+      else
+        logger.info "Running #{type} command: #{cmd}"
+        begin
+          res = Open3.popen2e(cmd) do |stdin, output, th|
+            stdin.close
+            pid = th.pid
+            logger.debug "Started pid #{pid}"
+            output.each {|l| logger.debug l.strip }
+            status = th.value
+            logger.debug "Process exited: #{status.to_s}"
+            status
           end
+          if res.success?
+            logger.info "#{type.capitalize} succeeded"
+          else
+            logger.warn "#{type.capitalize} failed! #{cmd} returned #{res.exitstatus}"
+            success = false
+          end
+        rescue => e
+          logger.error "Error encountered running #{type} command: #{e.message}"
+          success = false
         end
-        return success
-      ensure
-        # we want to roll back files only if check failed
-        if failed_command == :check && success == false
-          _rollback updated_targets
-        end
       end
-    end
-
-    def _rollback updated_targets
-      files_to_rollback = updated_targets.reject {|x| x[:backup].nil? }
-      files_to_remove = updated_targets.select{|x| x[:backup].nil? }.map{|x| x[:file]}
-      logger.warn "Performing rollback of modified files"
-      unless files_to_remove.empty?
-        logger.debug "Removing #{files_to_remove.join " "}"
-        File.unlink(*files_to_remove)
-      end
-      files_to_rollback.each do |target|
-        logger.debug "Moving #{target[:backup]} to #{target[:file]}"
-        FileUtils.mv target[:backup], target[:file]
-      end
+      success
     end
 
     # given a command type, expand any erb in it with exposed values
     # type is one of [:check, :commit]
-    def _template_command type
+    def template_command type, template_vars
       # ignore missing commands
       command = case type
       when :check
@@ -171,16 +185,51 @@ module Merlin
       end
       return nil if command.nil?
       begin
-        destination = @destination
-        static_outputs = @static_files.values
-        dynamic_outputs = @templates.values
-        outputs = static_outputs + dynamic_outputs
         erb = Erubis::Eruby.new(command)
-        erb.result(binding)
+        erb.result(template_vars)
       rescue => e
         logger.error "Error templating #{type} command! #{e.message}"
         raise e
       end
+    end
+
+    def _contents_changed(target, new_output)
+      target = Pathname.new(target) unless target.is_a? Pathname
+      og_hash = if target.exist? and target.readable?
+          Digest::SHA256.file(target).hexdigest
+        else
+          "none"
+        end
+      new_hash = Digest::SHA256.hexdigest(new_output)
+      logger.debug "#{target} SHA256: #{og_hash}, new contents: #{new_hash}"
+      if og_hash == new_hash
+        logger.info "No change to #{target}"
+        false
+      else
+        logger.info "#{target} contents changed"
+        true
+      end
+    end
+
+    def _move_to(src, dest)
+      dest = Pathname.new(dest) unless dest.is_a? Pathname
+      dest = dest.expand_path
+      unless dest.dirname.directory?
+        logger.debug "Creating path #{dest.dirname} for #{dest}"
+        FileUtils.mkdir_p(dest.dirname)
+      end
+      logger.info "Moving #{src} to #{dest}"
+      FileUtils.mv src, dest
+    end
+
+    def _write_to(target, dir, output)
+      outfile = Pathname.new(dir).join(target)
+      unless outfile.dirname.directory?
+        logger.debug "Creating path #{outfile.dirname} for #{target}"
+        FileUtils.mkdir_p(outfile.dirname)
+      end
+      logger.info "Writing #{outfile}"
+      File.open(outfile,'w'){|f| f.write output}
     end
 
   end

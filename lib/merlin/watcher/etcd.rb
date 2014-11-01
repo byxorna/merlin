@@ -14,18 +14,18 @@ module Merlin
       @logger = opts[:logger]
     end
 
-    def get &block
-      logger.debug "Getting #{path}"
+    def get
+      logger.debug "Getting #{path} from #{client.host}:#{client.port}"
       begin
         data = client.get(path, :recursive => true, :sorted => true)
-        if block_given?
-          yield data
-        else
-          return data
-        end
       rescue => e
-        logger.error "Unable to get #{path} from etcd"
-        raise e
+        logger.error "Unable to get #{path} from etcd: #{e.message}"
+        raise
+      end
+      if block_given?
+        yield data
+      else
+        return data
       end
     end
 
@@ -34,7 +34,7 @@ module Merlin
     # modified_index+1 index, so if multiple changes happen between watches, we
     # fire for each one. TODO we should add debouncing so we can defer updates
     # within a window
-    def observe wait_index = nil, &block
+    def observe wait_index = nil
       raise "You should give me a block" unless block_given?
       @running = true
       index = wait_index

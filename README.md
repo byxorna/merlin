@@ -14,7 +14,7 @@ A sample config looks like this:
       templates:
         "config/examples/templates/testing.conf.erb": testing.conf
       destination: /tmp/testing/
-      static_files:
+      statics:
         - config/examples/static/test.txt
       check_cmd: echo "Check command"
       commit_cmd: echo "Commit command"
@@ -24,7 +24,8 @@ A sample config looks like this:
         "config/named/company.net.erb": company.net
         "config/named/domain.company.net.erb": domain.company.net
       destination: /var/named
-      static_files:
+      atomic: true
+      statics:
         /opt/repos/named/domain.company.net-custom: domain.company.net-custom
       check_cmd: "/usr/bin/check_zones <%= outputs.join ' ' %>"
       commit_cmd: service named reload
@@ -32,19 +33,18 @@ A sample config looks like this:
 * ```watch```: What keyspace in etcd to watch for changes. The whole tree at ```watch``` will be passed to your templates as ```data```.
 * ```templates```: Key is the path to a template in ERuby; the value is the path relative to ```destination``` you want the templated file to go.
 * ```destination```: What directory should all of the output be relative to. If omitted, assumes output is relative to pwd.
-* ```static_files```: Additional static files that should be watched on the filesystem to trigger a config generation if modified. These can be a list of files, relative to pwd, or absolute. If ```static_files``` is a hash of input -> output, output is relative to ```destination``` unless output is absolute.
+* ```statics```: Additional static files that should be watched on the filesystem to trigger a config generation if modified. ```statics``` is a hash of input -> output, where output is relative to ```destination```.
 * ```check_cmd```: Command to run to verify the output of the emitter is correct (i.e. service httpd configtest). If this fails, merlin will roll back the configs. Allows erb expansion.
 * ```commit_cmd```: Command to commit results once checked (i.e. cd ... && git commit -am ... && git push origin HEAD). Allows erb expansion.
+* ```atomic```: Boolean. If true, destination will be an atomic symlink to the generated files. The destinations created will not be cleaned up. If omitted, files are just copied from the staging directory into destination.
 
 Additionally, both check_cmd and commit_cmd can use ERB to template in a handful of useful variables. i.e.
 
     check_cmd: "/usr/bin/check_files -d <%= destination %>"
     commit_cmd: "git add <%= outputs.join " " %> && git commit -m '...' && git push"
 
-* ```destination```: Directory where template outputs and static files are written for this stage.
-* ```outputs```: Array of fully qualified files output by this stage. Includes static and templated files.
-* ```static_outputs```: Array of fully qualified static files.
-* ```dynamic_outputs```: Array of fully qualified template output files.
+* ```dest```: Directory where template outputs and static files are written for this stage. (Check -> a temp directory, commit -> the destination directory)
+* ```files```: Array of fully qualified files output by this stage. Includes static and templated files.
 
 ## Templates
 
@@ -139,10 +139,8 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 ## TODO
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
+* when performing atomic deploys, we dont clean up the old directories. We should
 * make sure filewatcher is converting to absolute path
-* static_files should have a destination as well, and be copied into ```destination``` when changed. Also should trigger commit check
-  * this should be implemented as so:
-    * generate configs into a tempdir
 * Is Etcd::Client thread safe? (bin/merlin)
 * Finish test suite! write tests for the CLI.
 * Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)

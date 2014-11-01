@@ -44,7 +44,8 @@ end
 
 # vet config is all present
 default_config = {
-  'static_files' => []
+  'statics' => [],
+  'atomic' => false
 }
 # TODO add more logic about ensuring config is well formed
 targets = @config.inject({}) do |memo,(k,v)|
@@ -62,10 +63,11 @@ if @options[:mode] == :watch
   #TODO this should spawn a bunch of threads to watch?
   watchers = targets.inject({}) do |memo, (name, config)|
     logger.info "Starting up emitter for #{name}"
-    emitter = Merlin::Emitter.new(config['templates'], config['destination'],
+    emitter = Merlin::Emitter.new(name, config['templates'], config['destination'],
       :check_cmd => config['check_cmd'],
       :commit_cmd => config['commit_cmd'],
-      :static_files => config['static_files'],
+      :statics => config['statics'],
+      :atomic => config['atomic'],
       :logger => logger)
     # TODO figure out if the Etcd::Client is thread safe, or if we need a separate instace per emitter/watcher pair
     begin
@@ -74,21 +76,35 @@ if @options[:mode] == :watch
       abort "Unable to configure etcd client: #{e.message}"
     end
     watcher = Merlin::EtcdWatcher.new(client, config['watch'], :logger => logger)
-    # lets get the current state first, and begin observing from that modified_index
-    d = watcher.get
     # this way we will trigger a watch immediately on startup
     emit_blk = proc do |arg|
-      watcher.get do |data|
-        emitter.emit data
+      begin
+        watcher.get do |data|
+          begin
+            emitter.emit data
+          rescue => e
+            # just log and carry on. we dont wanna kill the watcher thread if a templating error happened
+            logger.error "Error emitting configurations: #{e.message}"
+            logger.error e.backtrace.join("\n")
+          end
+        end
+      rescue => e
+        logger.error "Error getting data from etcd at #{config['watch']}: #{e.message}"
+        logger.error e.backtrace.join("\n")
       end
     end
-    watcher.observe d.etcd_index, &emit_blk
+
     file_watchers = []
     if @options[:file_watch]
-      file_watchers = (config['static_files'] + config['templates'].keys).map do |f|
+      file_watchers = (config['statics'] + config['templates'].keys).map do |f|
         Merlin::FileWatcher.new(f, logger).observe(&emit_blk)
       end
     end
+
+    logger.debug "Determining latest etcd index to observe from"
+    d = watcher.get
+    watcher.observe d.etcd_index, &emit_blk
+
     memo[name] = {
       :emit_blk => emit_blk,
       :etcd => watcher,
@@ -127,10 +143,11 @@ if @options[:mode] == :watch
   end
 else
   targets.each do |name, config|
-    emitter = Merlin::Emitter.new(config['templates'], config['destination'],
+    emitter = Merlin::Emitter.new(name, config['templates'], config['destination'],
       :check_cmd => config['check_cmd'],
       :commit_cmd => config['commit_cmd'],
-      :static_files => config['static_files'],
+      :statics => config['statics'],
+      :atomic => config['atomic'],
       :logger => logger)
     begin
       client = Etcd::Client.new(:host => @options[:etcd_server], :port => @options[:etcd_port])
