@@ -2,8 +2,9 @@ PATH
   remote: .
   specs:
     merlin (0.1.0)
+      colorize
       erubis (~> 2.7.0)
-      etcd
+      etcd (~> 0.2.4)
       listen (~> 2.0)
 
 GEM
@@ -11,6 +12,7 @@ GEM
   specs:
     celluloid (0.16.0)
       timers (~> 4.0.0)
+    colorize (0.7.3)
     diff-lcs (1.2.5)
     erubis (2.7.0)
     etcd (0.2.4)

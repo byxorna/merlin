@@ -15,9 +15,10 @@ Gem::Specification.new do |s|
   s.require_paths = %w(lib)
   s.bindir        = 'bin'
 
-  s.add_dependency "etcd"
+  s.add_dependency "etcd", "~> 0.2.4"
   s.add_dependency "erubis", "~> 2.7.0"
   s.add_dependency "listen", "~> 2.0"
+  s.add_dependency "colorize"
 
   s.add_development_dependency "rspec", "~> 3.1.0"
   s.add_development_dependency "rake"
