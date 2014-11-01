@@ -20,7 +20,7 @@ module Merlin
       # atomic commit means we will atomically mv the tmp output dir to destination
       # if not set, we will copy each file into the destination before committing
       @atomic = opts[:atomic] ? true : false
-      @destination = Pathname.new(destination)
+      @destination = Pathname.new(destination).expand_path
       if @atomic
         if @destination.directory? && !@destination.symlink?
           # ensure destination is either absent, or a symlink and not a directory
@@ -152,7 +152,7 @@ module Merlin
             stdin.close
             pid = th.pid
             logger.debug "Started pid #{pid}"
-            output.each {|l| logger.debug l.strip }
+            output.each {|l| logger.info l.strip }
             status = th.value
             logger.debug "Process exited: #{status.to_s}"
             status
