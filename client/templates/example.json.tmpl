@@ -1,6 +1,0 @@
----
-{{ range gets "/backends/*" }}
-  "{{.Key}}":{{$data := json .Value }}
-    ip: {{$data.ip}}
-    port: {{$data.port}}
-    state: {{$data.state}}{{end}}

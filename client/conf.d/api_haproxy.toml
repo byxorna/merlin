@@ -1,8 +1,0 @@
-[template]
-prefix = "/merlin/example"
-src = "api_haproxy.conf.tmpl"
-dest = "/tmp/haproxy/haproxy.cfg"
-keys = [
-  "/backends"
-]
-check_cmd = "echo 'checking {{.src}}'"

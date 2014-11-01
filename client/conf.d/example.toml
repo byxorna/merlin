@@ -1,8 +1,0 @@
-[template]
-prefix = "/merlin/example"
-src = "example.json.tmpl"
-dest = "/tmp/example.json"
-keys = [
-  "/backends"
-]
-check_cmd = "echo 'checking {{.src}}'"
