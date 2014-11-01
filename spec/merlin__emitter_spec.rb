@@ -83,6 +83,14 @@ describe Merlin::Emitter do
       expect(res).to eq(false)
       expect(File.read(existing_file)).to eq("original file")
     end
+    it "rolls back template output files if check command is missing" do
+      existing_file = File.join(destination,"a.conf")
+      File.open(existing_file,'w') {|f| f.write "original file"}
+      emitter.instance_variable_set(:@check_cmd, "sldfjasdifjaosd")
+      res = emitter.emit(data)
+      expect(res).to eq(false)
+      expect(File.read(existing_file)).to eq("original file")
+    end
     it "rolls back static output files if check fails" do
       static_outputs = static_emitter.static_map.values
       files = static_outputs.map{|s| Pathname.new(static_emitter.destination).join(s) }

@@ -6,7 +6,7 @@ testing:
   destination: /tmp/testing/
   atomic: true
   statics:
-    - config/examples/static/test.txt
+    config/examples/static/test.txt: test.txt
   check_cmd: echo "This is the check command <%= dest %>"
   commit_cmd: echo "This is the commit command <%= dest %>"
 

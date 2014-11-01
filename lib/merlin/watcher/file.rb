@@ -17,7 +17,6 @@ module Merlin
     def observe &block
       raise "You should give me a block" unless block_given?
       #TODO listen to a directory, yield block whenever there is a change
-      logger.debug "Watching for changes to #{filename}"
       @listener = Listen.to(File.dirname(filename), :only => %r|#{File.basename filename}|) do |mod,add,del|
         # run the block if the file was modified
         unless mod.empty?
@@ -25,7 +24,7 @@ module Merlin
           yield mod
         end
       end
-      logger.debug "Starting listener"
+      logger.debug "Starting file watcher for #{filename}"
       @listener.start
       self
     end
