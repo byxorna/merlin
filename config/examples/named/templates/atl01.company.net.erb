@@ -1,0 +1,14 @@
+<% datacenter = 'atl01' %>
+$ORIGIN <%= datacenter %>.company.net.
+<%
+domain = data.children.select{|x| x.key =~ /#{datacenter}$/}.first
+%>
+<% if !domain.nil? %>
+  <% domain.children.each do |node|
+      name = node.key.split('/').last %>
+<%= name %> IN A <%= node.value %>
+  <% end %>
+<% else %>
+; No records found for <%= datacenter %> under <%= data.key %>
+<% end %>
+

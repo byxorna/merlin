@@ -96,7 +96,7 @@ if @options[:mode] == :watch
 
     file_watchers = []
     if @options[:file_watch]
-      file_watchers = (config['statics'] + config['templates'].keys).map do |f|
+      file_watchers = (config['statics'].keys + config['templates'].keys).map do |f|
         Merlin::FileWatcher.new(f, logger).observe(&emit_blk)
       end
     end

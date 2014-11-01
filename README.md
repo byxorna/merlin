@@ -140,6 +140,7 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
 * when performing atomic deploys, we dont clean up the old directories. We should
+* Add helpers to ERubis to get key name instead of full value, find path, etc.
 * make sure filewatcher is converting to absolute path
 * Is Etcd::Client thread safe? (bin/merlin)
 * Finish test suite! write tests for the CLI.

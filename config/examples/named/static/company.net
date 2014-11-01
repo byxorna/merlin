@@ -1,0 +1,19 @@
+$TTL 300    ; 5 minutes
+@ IN SOA  ns1.jfk01.company.net. hostmaster.company.com. (
+                1414792255 ; serial
+                600        ; refresh (10 minutes)
+                1800       ; retry (30 minutes)
+                604800     ; expire (1 week)
+                300        ; minimum (5 minutes)
+                )
+
+                IN  NS  ns1.company.net.
+                IN  NS  ns2.company.net.
+                IN  NS  ns3.company.net.
+
+$ORIGIN company.net.
+$INCLUDE jfk01.company.net
+$INCLUDE sfo01.company.net
+$INCLUDE jfk01.company.net-custom
+$INCLUDE sfo01.company.net-custom
+

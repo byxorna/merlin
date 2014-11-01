@@ -1,0 +1,7 @@
+; WARNING: Make sure to leave a blank line at the end of this file or bind gets cranky.
+$ORIGIN jfk01.company.net.
+
+myhost1              IN A      10.9.39.1
+myhost2              IN A      10.2.5.8
+monitoring           IN CNAME  myhost2
+

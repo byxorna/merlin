@@ -1,0 +1,6 @@
+; WARNING: Make sure to leave a blank line at the end of this file or bind gets cranky.
+$ORIGIN sfo01.company.net.
+
+monitoring              IN A      172.16.2.5
+graphing                IN A      172.28.3.29
+collins                 IN CNAME  monitoring

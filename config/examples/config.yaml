@@ -7,7 +7,6 @@ testing:
   atomic: true
   statics:
     - config/examples/static/test.txt
-  debounce: 10 seconds
   check_cmd: echo "This is the check command <%= dest %>"
   commit_cmd: echo "This is the commit command <%= dest %>"
 

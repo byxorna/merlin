@@ -1,0 +1,15 @@
+---
+named:
+  watch: /merlin/named/company.net
+  templates:
+    "config/examples/named/templates/jfk01.company.net.erb": jfk01.company.net
+    "config/examples/named/templates/atl01.company.net.erb": atl01.company.net
+    "config/examples/named/templates/sfo01.company.net.erb": sfo01.company.net
+  destination: /tmp/named
+  statics:
+    config/examples/named/static/company.net: company.net
+    config/examples/named/static/jfk01.company.net-custom: jfk01.company.net-custom
+    config/examples/named/static/sfo01.company.net-custom: sfo01.company.net-custom
+  check_cmd: named-checkconf -t <%= dest %> ; exit 0
+  commit_cmd: service named reload
+
