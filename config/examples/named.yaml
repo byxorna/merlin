@@ -10,6 +10,6 @@ named:
     config/examples/named/static/company.net: company.net
     config/examples/named/static/jfk01.company.net-custom: jfk01.company.net-custom
     config/examples/named/static/sfo01.company.net-custom: sfo01.company.net-custom
-  check_cmd: named-checkconf -t <%= dest %> ; exit 0
-  commit_cmd: service named reload
+  check_cmd: echo "I would have run named-checkconf -t <%= dest %>"
+  commit_cmd: echo "service named reload"
 

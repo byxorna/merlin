@@ -171,7 +171,7 @@ if @options[:mode] == :watch
     sleep 0.1
   end
 else
-  targets.each do |name, config|
+  statuses = targets.map do |name, config|
     logger = new_logger "#{name}:cli"
     emitter = Merlin::Emitter.new(name, config['templates'], config['destination'],
       :check_cmd => config['check_cmd'],
@@ -186,6 +186,19 @@ else
       exit 1
     end
     watcher = Merlin::EtcdWatcher.new(client, config['watch'], :logger => new_logger("#{name}:etcd"))
-    emitter.emit watcher.get
+    [name,emitter.emit(watcher.get)]
+  end
+  statuses = Hash[statuses]
+  if statuses.values.all?
+    default_logger.info "All targets generated successfully"
+  else
+    statuses.each do |name,status|
+      if status
+        default_logger.info "#{name} generated successfully"
+      else
+        default_logger.warn "#{name} failed to generate"
+      end
+    end
+    exit 1
   end
 end

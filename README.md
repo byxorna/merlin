@@ -14,20 +14,23 @@ A sample config looks like this:
       templates:
         "config/examples/templates/testing.conf.erb": testing.conf
       destination: /tmp/testing/
-      statics:
-        - config/examples/static/test.txt
-      check_cmd: echo "Check command"
-      commit_cmd: echo "Commit command"
-    named:
-      watch: /merlin/named
-      templates:
-        "config/named/company.net.erb": company.net
-        "config/named/domain.company.net.erb": domain.company.net
-      destination: /var/named
       atomic: true
       statics:
-        /opt/repos/named/domain.company.net-custom: domain.company.net-custom
-      check_cmd: "/usr/bin/check_zones <%= outputs.join ' ' %>"
+        config/examples/static/test.txt: test.txt
+      check_cmd: echo "This is the check command <%= files.join(' ') %>"
+      commit_cmd: echo "This is the commit command <%= dest %>"
+    named:
+      watch: /merlin/named/company.net
+      templates:
+        "config/examples/named/templates/jfk01.company.net.erb": jfk01.company.net
+        "config/examples/named/templates/atl01.company.net.erb": atl01.company.net
+        "config/examples/named/templates/sfo01.company.net.erb": sfo01.company.net
+      destination: /tmp/named
+      statics:
+        config/examples/named/static/company.net: company.net
+        config/examples/named/static/jfk01.company.net-custom: jfk01.company.net-custom
+        config/examples/named/static/sfo01.company.net-custom: sfo01.company.net-custom
+      check_cmd: named-checkconf -t <%= dest %>
       commit_cmd: service named reload
 
 * ```watch```: What keyspace in etcd to watch for changes. The whole tree at ```watch``` will be passed to your templates as ```data```.
@@ -62,67 +65,111 @@ A sample template using embedded Ruby. The data that you are watching for at "wa
 
 Used to just generate configs once, and then quit.
 
-    $ merlin -c config/example/config.yaml --debug --oneshot
-    D, [2014-10-24T23:10:46.280916 #88800] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-24T23:10:46.290773 #88800]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-24T23:10:46.291585 #88800] DEBUG -- : /tmp/testing/testing.conf SHA256: none, new contents: a52e73aa22f7840c4abaa92349552d1a264b45be245cd522fad9a4a330d98c01
-    I, [2014-10-24T23:10:46.291628 #88800]  INFO -- : Writing /tmp/testing/testing.conf
-    I, [2014-10-24T23:10:46.291862 #88800]  INFO -- : No check command specified, skipping check
-    I, [2014-10-24T23:10:46.291898 #88800]  INFO -- : No commit command specified, skipping check
-    $ cat /tmp/testing/testing.conf
-    This is a template
-      /merlin/testing/key1: hello
-      /merlin/testing/newkey: world
-    This is the end of the template
+    $ bundle exec ./bin/merlin --oneshot -c config/examples/named.yaml -d -e 192.168.59.103:4001
+    2014-11-01T17:21:33.885-0400 [named:etcd] DEBUG: Getting /merlin/named/company.net from 192.168.59.103:4001
+    2014-11-01T17:21:33.896-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/jfk01.company.net.erb
+    2014-11-01T17:21:33.896-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/atl01.company.net.erb
+    2014-11-01T17:21:33.897-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/sfo01.company.net.erb
+    2014-11-01T17:21:33.897-0400 [named:emitter] INFO: Reading static file config/examples/named/static/company.net
+    2014-11-01T17:21:33.897-0400 [named:emitter] INFO: Reading static file config/examples/named/static/jfk01.company.net-custom
+    2014-11-01T17:21:33.897-0400 [named:emitter] INFO: Reading static file config/examples/named/static/sfo01.company.net-custom
+    2014-11-01T17:21:33.898-0400 [named:emitter] DEBUG: /tmp/named/jfk01.company.net SHA256: none, new contents: bff66a780bb74b5f870ee4cf5f1588da6f84628128c7614c34e9f1077878d1e7
+    2014-11-01T17:21:33.898-0400 [named:emitter] INFO: /tmp/named/jfk01.company.net contents changed
+    2014-11-01T17:21:33.898-0400 [named:emitter] DEBUG: Created tmp directory /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg
+    2014-11-01T17:21:33.899-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/jfk01.company.net
+    2014-11-01T17:21:33.899-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/atl01.company.net
+    2014-11-01T17:21:33.899-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/sfo01.company.net
+    2014-11-01T17:21:33.899-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/company.net
+    2014-11-01T17:21:33.900-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/jfk01.company.net-custom
+    2014-11-01T17:21:33.900-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/sfo01.company.net-custom
+    2014-11-01T17:21:33.900-0400 [named:emitter] INFO: Running check command: echo "I would have run named-checkconf -t /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg"
+    2014-11-01T17:21:33.902-0400 [named:emitter] DEBUG: Started pid 15380
+    2014-11-01T17:21:33.903-0400 [named:emitter] INFO: I would have run named-checkconf -t /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg
+    2014-11-01T17:21:33.904-0400 [named:emitter] DEBUG: Process exited: pid 15380 exit 0
+    2014-11-01T17:21:33.904-0400 [named:emitter] INFO: Check succeeded
+    2014-11-01T17:21:33.904-0400 [named:emitter] INFO: Moving outputs from /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg to /tmp/named
+    2014-11-01T17:21:33.904-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/jfk01.company.net to /tmp/named/jfk01.company.net
+    2014-11-01T17:21:33.904-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/atl01.company.net to /tmp/named/atl01.company.net
+    2014-11-01T17:21:33.905-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/sfo01.company.net to /tmp/named/sfo01.company.net
+    2014-11-01T17:21:33.905-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/company.net to /tmp/named/company.net
+    2014-11-01T17:21:33.905-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/jfk01.company.net-custom to /tmp/named/jfk01.company.net-custom
+    2014-11-01T17:21:33.905-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg/sfo01.company.net-custom to /tmp/named/sfo01.company.net-custom
+    2014-11-01T17:21:33.905-0400 [named:emitter] INFO: Running commit command: echo "service named reload"
+    2014-11-01T17:21:33.907-0400 [named:emitter] DEBUG: Started pid 15381
+    2014-11-01T17:21:33.908-0400 [named:emitter] INFO: service named reload
+    2014-11-01T17:21:33.909-0400 [named:emitter] DEBUG: Process exited: pid 15381 exit 0
+    2014-11-01T17:21:33.909-0400 [named:emitter] INFO: Commit succeeded
+    2014-11-01T17:21:33.909-0400 [named:emitter] DEBUG: Cleaning up /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15379-w5pdqg
+    $ at /tmp/named/jfk01.company.net
+    $ORIGIN jfk01.company.net.
+    web2 IN A 10.2.1.2
+    web3 IN A 10.2.1.3
+    web4 IN A 10.2.1.4
 
 ### Watcher
 
 Watch and react to changes in etcd and emit new configs. Both the ```watch``` path in your config, as well as any static files and templates will be watched for changes, and a new set of configs will be emitted whenever any of those change. You can also trigger a refresh by sending the process ```SIGHUP``` or ```SIGUSR1```.
 
-    $ merlin -c config/example/config.yaml
-    I, [2014-10-27T08:29:10.309085 #56169]  INFO -- : Starting up emitter for testing
-    D, [2014-10-27T08:29:10.309208 #56169] DEBUG -- : Getting /merlin/testing
-    D, [2014-10-27T08:29:10.330709 #56169] DEBUG -- : Started etcd watch thread at /merlin/testing with index 170
-    D, [2014-10-27T08:29:10.330778 #56169] DEBUG -- : Awaiting index 170 at /merlin/testing
-    D, [2014-10-27T08:29:10.330642 #56169] DEBUG -- : Watching for changes to config/examples/static/test.txt
-    D, [2014-10-27T08:29:10.331188 #56169] DEBUG -- : Starting listener
-    I, [2014-10-27T08:29:10.337268 #56169]  INFO -- : Watch fired for /merlin/testing: delete /merlin/testing/new with etcd index 170 and modified index 170
-    D, [2014-10-27T08:29:10.337374 #56169] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-27T08:29:10.351636 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-27T08:29:10.353350 #56169] DEBUG -- : Watching for changes to config/examples/templates/testing.conf.erb
-    D, [2014-10-27T08:29:10.353486 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e, new contents: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e
-    I, [2014-10-27T08:29:10.353941 #56169]  INFO -- : No change to /tmp/testing/testing.conf
-    D, [2014-10-27T08:29:10.353994 #56169] DEBUG -- : Awaiting index 171 at /merlin/testing
-    D, [2014-10-27T08:29:10.353874 #56169] DEBUG -- : Starting listener
-    I, [2014-10-27T08:29:40.763007 #56169]  INFO -- : Watch fired for /merlin/testing: set /merlin/testing/new_key with etcd index 170 and modified index 171
-    D, [2014-10-27T08:29:40.763115 #56169] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-27T08:29:40.770235 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-27T08:29:40.770806 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: a6f0141ba90bc9d4cba7e648b812312de754f90766ce7ea165debb57a55dd44e, new contents: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42
-    D, [2014-10-27T08:29:40.770857 #56169] DEBUG -- : Copying /tmp/testing/testing.conf to /tmp/testing/testing.conf.bak
-    I, [2014-10-27T08:29:40.771117 #56169]  INFO -- : Writing /tmp/testing/testing.conf
-    I, [2014-10-27T08:29:40.771253 #56169]  INFO -- : Running check command: echo "Checking..."
-    D, [2014-10-27T08:29:40.772959 #56169] DEBUG -- : Started pid 56422
-    D, [2014-10-27T08:29:40.774881 #56169] DEBUG -- : Checking...
-    D, [2014-10-27T08:29:40.775252 #56169] DEBUG -- : Process exited: pid 56422 exit 0
-    I, [2014-10-27T08:29:40.775331 #56169]  INFO -- : Check succeeded
-    I, [2014-10-27T08:29:40.775392 #56169]  INFO -- : Running commit command: echo "This is the commit command"
-    D, [2014-10-27T08:29:40.776808 #56169] DEBUG -- : Started pid 56424
-    D, [2014-10-27T08:29:40.779286 #56169] DEBUG -- : This is the commit command
-    D, [2014-10-27T08:29:40.779640 #56169] DEBUG -- : Process exited: pid 56424 exit 0
-    I, [2014-10-27T08:29:40.779743 #56169]  INFO -- : Commit succeeded
-    D, [2014-10-27T08:29:40.779797 #56169] DEBUG -- : Awaiting index 172 at /merlin/testing
-    W, [2014-10-27T08:30:14.548725 #56169]  WARN -- : Received reload request
-    D, [2014-10-27T08:30:14.548872 #56169] DEBUG -- : Getting /merlin/testing
-    I, [2014-10-27T08:30:14.562458 #56169]  INFO -- : Templating config/examples/templates/testing.conf.erb
-    D, [2014-10-27T08:30:14.562974 #56169] DEBUG -- : /tmp/testing/testing.conf SHA256: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42, new contents: 02de2483631fa790c2b8cac77442790f868c93add860a2aba508ed99ff757b42
-    I, [2014-10-27T08:30:14.563004 #56169]  INFO -- : No change to /tmp/testing/testing.conf
-    ^CD, [2014-10-27T08:30:35.857303 #56169] DEBUG -- : Terminating watchers for testing
-    $ cat /tmp/testing/testing.conf
-    This is a template
-      /merlin/testing/anotherone: aww yea
-      /merlin/testing/newkey: 3
-      /merlin/testing/whooo: 123
-    This is the end of the template
+    $ bundle exec ./bin/merlin -c config/examples/named.yaml -e 192.168.59.103:4001
+    2014-11-01T17:31:10.853-0400 [named:cli] INFO: Creating emitter for named
+    2014-11-01T17:31:11.006-0400 [named:cli] INFO: Running initial emitter with data etcd index 206 and modified index 179
+    2014-11-01T17:31:11.007-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/jfk01.company.net.erb
+    2014-11-01T17:31:11.007-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/atl01.company.net.erb
+    2014-11-01T17:31:11.008-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/sfo01.company.net.erb
+    2014-11-01T17:31:11.008-0400 [named:emitter] INFO: Reading static file config/examples/named/static/company.net
+    2014-11-01T17:31:11.008-0400 [named:emitter] INFO: Reading static file config/examples/named/static/jfk01.company.net-custom
+    2014-11-01T17:31:11.008-0400 [named:emitter] INFO: Reading static file config/examples/named/static/sfo01.company.net-custom
+    2014-11-01T17:31:11.009-0400 [named:emitter] INFO: No change to /tmp/named/jfk01.company.net
+    2014-11-01T17:31:11.009-0400 [named:emitter] INFO: No change to /tmp/named/atl01.company.net
+    2014-11-01T17:31:11.010-0400 [named:emitter] INFO: No change to /tmp/named/sfo01.company.net
+    2014-11-01T17:31:11.010-0400 [named:emitter] INFO: No change to /tmp/named/company.net
+    2014-11-01T17:31:11.010-0400 [named:emitter] INFO: No change to /tmp/named/jfk01.company.net-custom
+    2014-11-01T17:31:11.010-0400 [named:emitter] INFO: No change to /tmp/named/sfo01.company.net-custom
+    2014-11-01T17:31:11.010-0400 [named:emitter] INFO: No changes detected; skipping check and commit
+    2014-11-01T17:31:11.016-0400 [named:etcd] INFO: Watch fired for /merlin/named/company.net: set /merlin/named/company.net/sfo01/gabetesting with etcd index 206 and modified index 206
+    2014-11-01T17:31:11.025-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/jfk01.company.net.erb
+    2014-11-01T17:31:11.025-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/atl01.company.net.erb
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/sfo01.company.net.erb
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: Reading static file config/examples/named/static/company.net
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: Reading static file config/examples/named/static/jfk01.company.net-custom
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: Reading static file config/examples/named/static/sfo01.company.net-custom
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: No change to /tmp/named/jfk01.company.net
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: No change to /tmp/named/atl01.company.net
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: No change to /tmp/named/sfo01.company.net
+    2014-11-01T17:31:11.026-0400 [named:emitter] INFO: No change to /tmp/named/company.net
+    2014-11-01T17:31:11.027-0400 [named:emitter] INFO: No change to /tmp/named/jfk01.company.net-custom
+    2014-11-01T17:31:11.027-0400 [named:emitter] INFO: No change to /tmp/named/sfo01.company.net-custom
+    2014-11-01T17:31:11.027-0400 [named:emitter] INFO: No changes detected; skipping check and commit
+    2014-11-01T17:31:47.163-0400 [named:etcd] INFO: Watch fired for /merlin/named/company.net: set /merlin/named/company.net/jfk01/admin01 with etcd index 206 and modified index 207
+    2014-11-01T17:31:47.177-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/jfk01.company.net.erb
+    2014-11-01T17:31:47.178-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/atl01.company.net.erb
+    2014-11-01T17:31:47.179-0400 [named:emitter] INFO: Expanding template config/examples/named/templates/sfo01.company.net.erb
+    2014-11-01T17:31:47.179-0400 [named:emitter] INFO: Reading static file config/examples/named/static/company.net
+    2014-11-01T17:31:47.179-0400 [named:emitter] INFO: Reading static file config/examples/named/static/jfk01.company.net-custom
+    2014-11-01T17:31:47.179-0400 [named:emitter] INFO: Reading static file config/examples/named/static/sfo01.company.net-custom
+    2014-11-01T17:31:47.180-0400 [named:emitter] INFO: /tmp/named/jfk01.company.net contents changed
+    2014-11-01T17:31:47.180-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/jfk01.company.net
+    2014-11-01T17:31:47.181-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/atl01.company.net
+    2014-11-01T17:31:47.181-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/sfo01.company.net
+    2014-11-01T17:31:47.183-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/company.net
+    2014-11-01T17:31:47.183-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/jfk01.company.net-custom
+    2014-11-01T17:31:47.183-0400 [named:emitter] INFO: Writing /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/sfo01.company.net-custom
+    2014-11-01T17:31:47.184-0400 [named:emitter] INFO: Running check command: echo "I would have run named-checkconf -t /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i"
+    2014-11-01T17:31:47.190-0400 [named:emitter] INFO: I would have run named-checkconf -t /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i
+    2014-11-01T17:31:47.191-0400 [named:emitter] INFO: Check succeeded
+    2014-11-01T17:31:47.191-0400 [named:emitter] INFO: Moving outputs from /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i to /tmp/named
+    2014-11-01T17:31:47.191-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/jfk01.company.net to /tmp/named/jfk01.company.net
+    2014-11-01T17:31:47.192-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/atl01.company.net to /tmp/named/atl01.company.net
+    2014-11-01T17:31:47.193-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/sfo01.company.net to /tmp/named/sfo01.company.net
+    2014-11-01T17:31:47.193-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/company.net to /tmp/named/company.net
+    2014-11-01T17:31:47.194-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/jfk01.company.net-custom to /tmp/named/jfk01.company.net-custom
+    2014-11-01T17:31:47.194-0400 [named:emitter] INFO: Moving /var/folders/x5/ctzm07zs1tl233zx19xzdyzr0000gq/T/.merlin-named-20141101-15907-u3ic2i/sfo01.company.net-custom to /tmp/named/sfo01.company.net-custom
+    2014-11-01T17:31:47.195-0400 [named:emitter] INFO: Running commit command: echo "service named reload"
+    2014-11-01T17:31:47.199-0400 [named:emitter] INFO: service named reload
+    2014-11-01T17:31:47.199-0400 [named:emitter] INFO: Commit succeeded
+
+
+
 
 ## Static files
 
@@ -141,11 +188,7 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
 * when performing atomic deploys, we dont clean up the old directories. We should
 * Add helpers to ERubis to get key name instead of full value, find path, etc.
-* make sure filewatcher is converting to absolute path
-* Is Etcd::Client thread safe? (bin/merlin)
 * Finish test suite! write tests for the CLI.
-* Thread watching multiple template groups (needs to support logging to separate files?) (bin/merlin)
-* Config validation (bin/merlin)
 * Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)
 
 
