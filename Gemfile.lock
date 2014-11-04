@@ -5,6 +5,7 @@ PATH
       colorize
       erubis (~> 2.7.0)
       etcd (~> 0.2.4)
+      eventmachine (~> 1.0.3)
       listen (~> 2.0)
 
 GEM
@@ -17,6 +18,7 @@ GEM
     erubis (2.7.0)
     etcd (0.2.4)
       mixlib-log
+    eventmachine (1.0.3)
     ffi (1.9.6)
     hitimes (1.2.2)
     listen (2.7.11)

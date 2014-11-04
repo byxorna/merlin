@@ -19,6 +19,7 @@ Gem::Specification.new do |s|
   s.add_dependency "erubis", "~> 2.7.0"
   s.add_dependency "listen", "~> 2.0"
   s.add_dependency "colorize"
+  s.add_dependency "eventmachine", "~> 1.0.3"
 
   s.add_development_dependency "rspec", "~> 3.1.0"
   s.add_development_dependency "rake"

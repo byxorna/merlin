@@ -186,9 +186,9 @@ Use bundler to install the dependencies: ```bundle install```, then hack away an
 ## TODO
 
 * Pick a new name! Merlin is already a rubygem (http://rubygems.org/gems/merlin)
+* test and document coalescing updates
 * when performing atomic deploys, we dont clean up the old directories. We should
 * Add helpers to ERubis to get key name instead of full value, find path, etc.
 * Finish test suite! write tests for the CLI.
-* Support coalescing watches within an interval, so we dont fire a regeneration every change (watch/etcd)
 
 

@@ -7,6 +7,7 @@ require 'optparse'
 require 'yaml'
 require 'logger'
 require 'colorize'
+require 'eventmachine'
 
 @options = {}
 @defaults = {
@@ -31,9 +32,8 @@ OptionParser.new do |opts|
   opts.on('-h','--help','Show help') { puts opts ; exit 0 }
   opts.on('-o','--oneshot','Run a single generation; dont watch for changes') {@options[:mode] = :oneshot}
   opts.on('-c','--config CONFIG',String,"Use templates config (Default: #{@defaults[:config]})"){|v| @options[:config] = v}
+  opts.on('-w','--window SECONDS',Integer,"Coalesce events within window of SECONDS seconds (Default: false"){|v| @options[:coalesce] = v}
   opts.on('-d','--debug','Enable debugging'){ @options[:log_level] = Logger::DEBUG}
-  # TODO implement me
-  #opts.on('-D','--daemonize','Daemonize process'){ @options[:daemonize] = true}
   opts.on('-e','--etcd SERVER[:PORT]',String,"Etcd server and optional port (Default #{@defaults[:etcd_server]}:#{@defaults[:etcd_port]})") do |v|
     host,port = v.split ':'
     @options[:etcd_server] = host
@@ -105,10 +105,19 @@ if @options[:mode] == :watch
         logger.error e.backtrace.join("\n")
       end
     end
+    if @options[:coalesce]
+      # lets coalesce calls to the emit block if we were asked to
+      logger.info "Coalescing events within #{@options[:coalesce]} second windows"
+      coalescer = Merlin::Coalescer.new @options[:coalesce], new_logger("#{name}:coalescer"), &emit_blk
+    end
     get_emit_blk = proc do
       begin
         watcher.get do |data|
-          emit_blk.call(data)
+          if @options[:coalesce]
+            coalescer.coalesce(data)
+          else
+            emit_blk.call(data)
+          end
         end
       rescue => e
         logger.error "Error getting data from etcd at #{config['watch']}: #{e.message}"
@@ -137,6 +146,7 @@ if @options[:mode] == :watch
     memo[name] = {
       :get_emit_blk => get_emit_blk,
       :etcd => watcher,
+      :coalescer => coalescer,
       :files => file_watchers
     }
     memo
@@ -158,17 +168,20 @@ if @options[:mode] == :watch
   trap :HUP do
     events << :HUP
   end
-  loop do
-    while !events.empty?
-      e = events.shift
-      if [:HUP, :USR1].include? e
-        default_logger.warn "Received reload request"
-        watchers.each {|target,refs| refs[:get_emit_blk].call}
-      else
-        default_logger.warn "Received unknown event #{e}; ignoring"
+  EM.run do
+    EM.add_periodic_timer(0.25) do
+      unless events.empty?
+        e = events.shift
+        if [:HUP, :USR1].include? e
+          default_logger.warn "Received reload request"
+          watchers.each {|target,refs| refs[:get_emit_blk].call}
+        else
+          default_logger.warn "Received unknown event #{e}; ignoring"
+        end
       end
+      # every second, if we had a coalescer lets see if its ready to fire
+      watchers.each {|_,refs| refs[:coalescer].fire unless refs[:coalescer].nil? }
     end
-    sleep 0.1
   end
 else
   statuses = targets.map do |name, config|
