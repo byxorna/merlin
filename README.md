@@ -2,7 +2,9 @@
 
 Inspired by https://github.com/kelseyhightower/confd, this tool allows you to generate configuration files from data in etcd.
 
-[![Build Status](https://travis-ci.org/byxorna/merlin.png?branch=master)](https://travis-ci.org/byxorna/merlin) 
+[![Build Status](https://travis-ci.org/byxorna/merlin.png?branch=master)](https://travis-ci.org/byxorna/merlin)
+
+[![Build Status](https://drone.io/github.com/byxorna/merlin/status.png)](https://drone.io/github.com/byxorna/merlin/latest)
 
 ## Configuration
 
