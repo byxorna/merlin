@@ -2,3 +2,5 @@
 *.gem
 vendor/bundle
 spec/tmp
+# drop this so drone builds work
+Gemfile.lock
