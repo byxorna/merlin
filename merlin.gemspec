@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |s|
   s.name          = 'merlin'
-  s.version       = '0.1.0'
+  s.version       = %x{git describe HEAD}
   s.authors       = ['Gabe Conradi']
   s.email         = ['gabe@tumblr.com']
   s.homepage      = 'http://github.com/byxorna/merlin'
